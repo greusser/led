@@ -81,7 +81,7 @@ class TilesetDef {
 	}
 
 
-	public function toJson() {
+	public function toJson() : led.Json.TilesetDefJson {
 		return {
 			identifier: identifier,
 			uid: uid,
@@ -98,7 +98,7 @@ class TilesetDef {
 	}
 
 
-	public static function fromJson(p:Project, json:Dynamic) {
+	public static function fromJson(p:Project, json:led.Json.TilesetDefJson) {
 		var td = new TilesetDef( p, JsonTools.readInt(json.uid) );
 		td.tileGridSize = JsonTools.readInt(json.tileGridSize, Project.DEFAULT_GRID_SIZE);
 		td.spacing = JsonTools.readInt(json.spacing, 0);
@@ -125,10 +125,11 @@ class TilesetDef {
 			return false;
 		}
 
-		relPath = dn.FilePath.fromFile( relFilePath ).useSlashes().full;
+		var newPath = dn.FilePath.fromFile( relFilePath ).useSlashes();
+		relPath = newPath.full;
 
 		try {
-			var fullFp = dn.FilePath.fromFile( projectDir +"/"+ relFilePath );
+			var fullFp = newPath.hasDriveLetter() ? newPath : dn.FilePath.fromFile( projectDir +"/"+ relFilePath );
 			var fullPath = fullFp.full;
 			bytes = misc.JsTools.readFileBytes(fullPath);
 
@@ -163,6 +164,11 @@ class TilesetDef {
 
 		if( oldWid==pxWid && oldHei==pxHei )
 			return Ok;
+
+		if( padding>0 && oldWid>pxWid && oldHei>pxHei && dn.M.iabs(oldWid-pxWid)<=padding*2 && dn.M.iabs(oldHei-pxHei)<=padding*2 && pxWid%2==0 && pxHei%2==0 ) {
+			padding -= Std.int( dn.M.imin( oldWid-pxWid, oldHei-pxHei ) / 2 );
+			return TrimmedPadding;
+		}
 
 		var oldCwid = dn.M.ceil( oldWid / tileGridSize );
 
@@ -201,6 +207,15 @@ class TilesetDef {
 		for( ed in _project.defs.entities )
 			if( ed.tilesetId==uid && ed.tileId!=null )
 				ed.tileId = remapTileId(oldCwid, ed.tileId);
+
+		// Auto-layer tiles remapping
+		for(ld in _project.defs.layers)
+			if( ld.isAutoLayer() && ld.autoTilesetDefUid==uid ) {
+				for(rg in ld.autoRuleGroups)
+				for(r in rg.rules)
+				for(i in 0...r.tileIds.length)
+					r.tileIds[i] = remapTileId(oldCwid, r.tileIds[i]);
+			}
 
 
 		if( pxWid<oldWid || pxHei<oldHei )
@@ -267,6 +282,59 @@ class TilesetDef {
 				if( stid==tid )
 					return sel;
 		return null;
+	}
+
+
+	public function getTileGroupBounds(tileIds:Array<Int>) { // Warning: not good for real-time!
+		if( tileIds==null || tileIds.length==0 )
+			return {
+				top: -1,
+				bottom: -1,
+				left: -1,
+				right: -1,
+				wid: 0,
+				hei: 0,
+			}
+
+		var top = 99999;
+		var left = 99999;
+		var right = 0;
+		var bottom = 0;
+		for(tid in tileIds) {
+			top = dn.M.imin( top, getTileCy(tid) );
+			bottom = dn.M.imax( bottom, getTileCy(tid) );
+			left = dn.M.imin( left, getTileCx(tid) );
+			right = dn.M.imax( right, getTileCx(tid) );
+		}
+		return {
+			top: top,
+			bottom: bottom,
+			left: left,
+			right: right,
+			wid: right-left+1,
+			hei: bottom-top+1,
+		}
+	}
+
+
+	public function getTileGroupWidth(tileIds:Array<Int>) : Int {
+		var min = 99999;
+		var max = 0;
+		for(tid in tileIds) {
+			min = dn.M.imin( min, getTileCx(tid) );
+			max = dn.M.imax( max, getTileCx(tid) );
+		}
+		return max-min+1;
+	}
+
+	public function getTileGroupHeight(tileIds:Array<Int>) : Int {
+		var min = 99999;
+		var max = 0;
+		for(tid in tileIds) {
+			min = dn.M.imin( min, getTileCy(tid) );
+			max = dn.M.imax( max, getTileCy(tid) );
+		}
+		return max-min+1;
 	}
 
 

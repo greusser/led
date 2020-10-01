@@ -83,10 +83,9 @@ class EditTilesetDefs extends ui.modal.Panel {
 		// Main tileset view
 		jPickerWrapper.show().empty();
 		if( cur.isAtlasLoaded() ) {
-			var picker = new TilesetPicker(jPickerWrapper, cur);
+			var picker = new TilesetPicker(jPickerWrapper, cur, ViewOnly);
 			picker.renderGrid();
 			picker.resetScroll();
-			picker.mode = ViewOnly;
 		}
 
 		// Demo tiles
@@ -136,7 +135,7 @@ class EditTilesetDefs extends ui.modal.Panel {
 		var jLocate = jForm.find(".locate");
 		if( cur.relPath!=null ) {
 			jPath.empty().show().append( JsTools.makePath(cur.relPath) );
-			jLocate.empty().show().append( JsTools.makeExploreLink( Editor.ME.makeFullFilePath(cur.relPath) ) );
+			jLocate.empty().show().append( JsTools.makeExploreLink( Editor.ME.makeAbsoluteFilePath(cur.relPath) ) );
 		}
 		else {
 			jLocate.hide();
@@ -162,6 +161,7 @@ class EditTilesetDefs extends ui.modal.Panel {
 			dn.electron.Dialogs.open([".png", ".gif", ".jpg", ".jpeg"], Editor.ME.getProjectDir(), function(absPath) {
 				var oldRelPath = cur.relPath;
 				var relPath = Editor.ME.makeRelativeFilePath( absPath );
+				App.LOG.fileOp("Loading atlas: "+absPath);
 
 				if( !cur.importAtlasImage(editor.getProjectDir(), relPath) ) {
 					switch dn.Identify.getType( JsTools.readFileBytes(absPath) ) {
@@ -177,7 +177,8 @@ class EditTilesetDefs extends ui.modal.Panel {
 					return;
 				}
 
-				editor.watcher.stopWatching( editor.makeFullFilePath(oldRelPath) );
+				if( oldRelPath!=null )
+					editor.watcher.stopWatching( editor.makeAbsoluteFilePath(oldRelPath) );
 				editor.watcher.watchTileset(cur);
 
 				project.defs.autoRenameTilesetIdentifier(oldRelPath, cur);

@@ -56,7 +56,7 @@ class JsTools {
 	}
 
 
-	public static function prepareProjectFile(p:led.Project) : { bytes:haxe.io.Bytes, json:Dynamic } {
+	public static function prepareProjectFile(p:led.Project) : { bytes:haxe.io.Bytes, json:led.Json.ProjectJson } {
 		var json = p.toJson();
 		var jsonStr = dn.JsonPretty.stringify(p.minifyJson, json, Const.JSON_HEADER);
 
@@ -125,7 +125,6 @@ class JsTools {
 		jCanvas.appendTo(jWrapper);
 		jCanvas.attr("width", ed.width*scale);
 		jCanvas.attr("height", ed.height*scale);
-		// jCanvas.css("zoom", sizePx / M.fmax(ed.width, ed.height));
 
 		var cnv = Std.downcast( jCanvas.get(0), js.html.CanvasElement );
 		var ctx = cnv.getContext2d();
@@ -160,7 +159,7 @@ class JsTools {
 				ctx.rect(0, 0, Std.int(ed.width*scale), Std.int(ed.height*scale));
 				ctx.fill();
 
-				if( ed.isTileValid() ) {
+				if( ed.isTileDefined() ) {
 					var td = project.defs.getTilesetDef(ed.tilesetId);
 					var x = 0;
 					var y = 0;
@@ -302,7 +301,7 @@ class JsTools {
 				case "mouseright": new J('<span class="icon mouseright"></span>');
 				case "mousewheel": new J('<span class="icon mousewheel"></span>');
 
-				case "+" : new J("<span/>").append("+");
+				case "+", "-", "to" : new J('<span class="misc">$k</span>');
 
 				case k.charAt(0) => "(": new J("<span/>").append(k);
 				case k.charAt(k.length-1) => ")": new J("<span/>").append(k);
@@ -345,7 +344,11 @@ class JsTools {
 
 			var cleanUrlReg = ~/(http[s]*:\/\/)*(.*)/g;
 			cleanUrlReg.match(url);
-			ui.Tip.attach(link, cleanUrlReg.matched(2), "link", true);
+			var displayUrl = cleanUrlReg.matched(2);
+			var cut = 40;
+			if( displayUrl.length>cut )
+				displayUrl = displayUrl.substr(0,cut)+"...";
+			ui.Tip.attach(link, displayUrl, "link", true);
 			link.click( function(ev) {
 				ev.preventDefault();
 				electron.Shell.openExternal(url);
@@ -373,16 +376,33 @@ class JsTools {
 						case "shift" : keys.push(K.SHIFT);
 						case "alt" : keys.push(K.ALT);
 						case _ :
+							var funcReg = ~/[fF]([0-9]+)/;
 							if( k.length==1 ) {
 								var cid = k.charCodeAt(0);
 								if( cid>="a".code && cid<="z".code )
 									keys.push( cid - "a".code + K.A );
 							}
+							else if( funcReg.match(k) )
+								keys.push( K.F1 + Std.parseInt(funcReg.matched(1)) - 1 );
 					}
 				}
 			}
 
 			ui.Tip.attach( jThis, tip, keys );
+		});
+
+		// Tabs
+		jCtx.find("ul.tabs").each( function(idx,e) {
+			var jTabs = new J(e);
+			jTabs.find("li").click( function(ev:js.jquery.Event) {
+				var jTab = ev.getThis();
+				jTabs.find("li").removeClass("active");
+				jTab.addClass("active");
+				jTabs
+					.siblings(".tab").hide()
+					.filter("[section="+jTab.attr("section")+"]").show();
+			});
+			jTabs.find("li:first").click();
 		});
 	}
 
@@ -428,6 +448,27 @@ class JsTools {
 	public static function writeFileBytes(path:String, bytes:haxe.io.Bytes) {
 		js.node.Require.require("fs");
 		js.node.Fs.writeFileSync( path, js.node.Buffer.hxFromBytes(bytes) );
+	}
+
+	public static function createDir(path:String) {
+		if( fileExists(path) )
+			return;
+		js.node.Require.require("fs");
+		js.node.Fs.mkdirSync(path);
+	}
+
+	public static function emptyDir(path:String) {
+		js.node.Require.require("fs");
+		if( !fileExists(path) )
+			return;
+
+		for(f in js.node.Fs.readdirSync(path)) {
+			var fp = dn.FilePath.fromDir(path);
+			fp.fileWithExt = f;
+			trace(fp);
+			if( js.node.Fs.lstatSync(fp.full).isFile() )
+				js.node.Fs.unlinkSync(fp.full);
+		}
 	}
 
 	public static function getExeDir() {
@@ -493,20 +534,29 @@ class JsTools {
 	}
 
 
-	public static function createTilePicker(tilesetId:Null<Int>, singleMode=false, tileIds:Array<Int>, onPick:(tileIds:Array<Int>)->Void) {
+	public static function createTilePicker(
+		tilesetId: Null<Int>,
+		mode: TilePickerMode=MultiTiles,
+		tileIds: Array<Int>,
+		onPick: (tileIds:Array<Int>)->Void
+	) {
 		var jTileCanvas = new J('<canvas class="tile"></canvas>');
 
 		if( tilesetId!=null ) {
 			jTileCanvas.addClass("active");
 			var td = Editor.ME.project.defs.getTilesetDef(tilesetId);
 
-			// Render tile
-			if( tileIds.length>0 ) {
+			if( tileIds.length==0 ) {
+				// No tile selected
+				jTileCanvas.addClass("empty");
+			}
+			else if( mode!=RectOnly ) {
+				// Single/random tiles
 				jTileCanvas.removeClass("empty");
 				jTileCanvas.attr("width", td.tileGridSize);
 				jTileCanvas.attr("height", td.tileGridSize);
 				td.drawTileToCanvas(jTileCanvas, tileIds[0]);
-				if( tileIds.length>1 ) {
+				if( tileIds.length>1 && mode!=RectOnly ) {
 					// Cycling animation among multiple tiles
 					jTileCanvas.addClass("multi");
 					var idx = 0;
@@ -527,19 +577,32 @@ class JsTools {
 					});
 				}
 			}
-			else
-				jTileCanvas.addClass("empty");
+			else {
+				// Tile group stamp
+				var bounds = td.getTileGroupBounds(tileIds);
+				var wid = M.imax(bounds.wid, 1);
+				var hei = M.imax(bounds.hei, 1);
+				jTileCanvas.attr("width", td.tileGridSize * wid );
+				jTileCanvas.attr("height", td.tileGridSize * hei );
+				var scale = M.fmin(1, 48 / ( M.fmax(wid, hei)*td.tileGridSize ) );
+				jTileCanvas.css("width", td.tileGridSize * wid * scale );
+				jTileCanvas.css("height", td.tileGridSize * hei * scale );
+
+				for(tid in tileIds) {
+					var tcx = td.getTileCx(tid);
+					var tcy = td.getTileCy(tid);
+					td.drawTileToCanvas(jTileCanvas, tid, (tcx-bounds.left)*td.tileGridSize, (tcy-bounds.top)*td.tileGridSize);
+				}
+			}
 
 			// Open picker
 			jTileCanvas.click( function(ev) {
 				var m = new ui.Modal();
 				m.addClass("singleTilePicker");
 
-				var tp = new ui.TilesetPicker(m.jContent, td);
-				if( singleMode )
-					tp.mode = SingleTile;
+				var tp = new ui.TilesetPicker(m.jContent, td, mode);
 				tp.setSelectedTileIds(tileIds);
-				if( singleMode )
+				if( mode==SingleTile )
 					tp.onSingleTileSelect = function(tileId) {
 						m.close();
 						onPick([tileId]);
@@ -548,21 +611,24 @@ class JsTools {
 					m.onCloseCb = function() {
 						onPick( tp.getSelectedTileIds() );
 					}
+				tp.focusOnSelection(true);
 			});
 		}
-		else
+		else {
+			// Invalid tileset
 			jTileCanvas.addClass("empty");
+		}
 
 		return jTileCanvas;
 	}
 
 
 	public static function createAutoPatternGrid(
-		rule:led.def.AutoLayerRuleDef,
-		layerDef:led.def.LayerDef,
+		rule: led.def.AutoLayerRuleDef,
+		layerDef: led.def.LayerDef,
 		previewMode=false,
 		?explainCell: (desc:Null<String>)->Void,
-		?onClick:(cx:Int, cy:Int, button:Int)->Void
+		?onClick: (cx:Int, cy:Int, button:Int)->Void
 	) {
 		var jGrid = new J('<div class="autoPatternGrid"/>');
 		jGrid.addClass("size-"+rule.size);
@@ -599,7 +665,30 @@ class JsTools {
 
 			// Center
 			if( isCenter ) {
-				jCell.addClass("center");
+				switch rule.tileMode {
+					case Single:
+						jCell.addClass("center");
+
+					case Stamp:
+						var jStampPreview = new J('<div class="stampPreview"/>');
+						jStampPreview.appendTo(jCell);
+						var previewWid = 32;
+						var previewHei = 32;
+						if( rule.tileIds.length>1 ) {
+							var td = Editor.ME.project.defs.getTilesetDef( layerDef.autoTilesetDefUid );
+							if( td!=null ) {
+								var bounds = td.getTileGroupBounds(rule.tileIds);
+								if( bounds.wid>1 )
+									previewWid = Std.int( previewWid * 1.9 );
+								if( bounds.hei>1 )
+									previewHei = Std.int( previewHei * 1.9 );
+							}
+						}
+						jStampPreview.css("width", previewWid + "px");
+						jStampPreview.css("height", previewHei + "px");
+						jStampPreview.css("left", ( rule.pivotX * (32-previewWid) ) + "px");
+						jStampPreview.css("top", ( rule.pivotY * (32-previewHei) ) + "px");
+				}
 				if( previewMode ) {
 					var td = Editor.ME.project.defs.getTilesetDef( layerDef.autoTilesetDefUid );
 					if( td!=null ) {
@@ -610,7 +699,6 @@ class JsTools {
 							jTile.addClass("multi");
 					}
 				}
-				// addExplain(jCell, "The tile(s) will be renderer here.");
 			}
 
 			// Cell color
@@ -624,7 +712,7 @@ class JsTools {
 						}
 						else {
 							jCell.css("background-color", C.intToHex( layerDef.getIntGridValueDef(M.iabs(v)-1).color ) );
-							addExplain(jCell, 'This cell should contain "${layerDef.getIntGridValueName(M.iabs(v)-1)}" to match.');
+							addExplain(jCell, 'This cell should contain "${layerDef.getIntGridValueDisplayName(M.iabs(v)-1)}" to match.');
 						}
 					}
 					else {
@@ -635,7 +723,7 @@ class JsTools {
 						}
 						else {
 							jCell.css("background-color", C.intToHex( layerDef.getIntGridValueDef(M.iabs(v)-1).color ) );
-							addExplain(jCell, 'This cell should NOT contain "${layerDef.getIntGridValueName(M.iabs(v)-1)}" to match.');
+							addExplain(jCell, 'This cell should NOT contain "${layerDef.getIntGridValueDisplayName(M.iabs(v)-1)}" to match.');
 						}
 					}
 				}

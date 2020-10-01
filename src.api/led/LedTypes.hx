@@ -94,3 +94,13 @@ enum EntityLimitBehavior {
 	PreventAdding;
 	MoveLastOne;
 }
+
+enum AutoLayerRuleTileMode {
+	Single;
+	Stamp;
+}
+enum AutoLayerRuleCheckerMode {
+	None;
+	Horizontal;
+	Vertical;
+}

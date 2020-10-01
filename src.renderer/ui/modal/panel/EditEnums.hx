@@ -129,7 +129,7 @@ class EditEnums extends ui.modal.Panel {
 
 		var grouped = project.defs.getGroupedExternalEnums();
 		for( group in grouped.keyValueIterator() ) {
-			var fullPath = editor.makeFullFilePath(group.key);
+			var fullPath = editor.makeAbsoluteFilePath(group.key);
 
 			// Source name
 			var e = new J("<li/>");
@@ -223,7 +223,7 @@ class EditEnums extends ui.modal.Panel {
 			jForm.find(".source")
 				.show()
 				.append( JsTools.makePath(curEnum.externalRelPath) )
-				.append( JsTools.makeExploreLink( editor.makeFullFilePath(curEnum.externalRelPath) ) );
+				.append( JsTools.makeExploreLink( editor.makeAbsoluteFilePath(curEnum.externalRelPath) ) );
 		}
 		else
 			jForm.find(".source").hide();
@@ -304,7 +304,7 @@ class EditEnums extends ui.modal.Panel {
 
 			// Tile preview
 			if( !curEnum.isExternal() ) {
-				var jPicker = JsTools.createTilePicker(curEnum.iconTilesetUid, true, [eValue.tileId], function(tileIds) {
+				var jPicker = JsTools.createTilePicker(curEnum.iconTilesetUid, SingleTile, [eValue.tileId], function(tileIds) {
 					eValue.tileId = tileIds[0];
 					editor.ge.emit(EnumDefChanged);
 				});
@@ -327,7 +327,7 @@ class EditEnums extends ui.modal.Panel {
 							project.iterateAllFieldInstances(F_Enum(curEnum.uid), function(fi) {
 								for(i in 0...fi.getArrayLength())
 									if( fi.getEnumValue(i)==eValue.id )
-										fi.parseValue(i, null); 
+										fi.parseValue(i, null);
 							});
 							project.defs.removeEnumDefValue(curEnum, eValue.id);
 							editor.ge.emit(EnumDefValueRemoved);

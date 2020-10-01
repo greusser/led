@@ -147,7 +147,7 @@ class LevelHistory {
 
 	function saveState(s:HistoryState) {
 		// Drop first element when max is reached
-		if( curIndex==MAX_HISTORY-1 ) {
+		if( curIndex==MAX_HISTORY-1 ) { // BUG seems to cause issues with auto-layers
 			var droppedState = states[0];
 			switch droppedState {
 				case ResizedLevel(beforeJson, afterJson):
@@ -222,7 +222,7 @@ class LevelHistory {
 				applyState( before, true );
 			}
 
-			App.LOG.debug("LH UNDO - "+toString());
+			// App.LOG.debug("LH UNDO - "+toString());
 		}
 	}
 
@@ -240,7 +240,7 @@ class LevelHistory {
 						editor.levelRender.bleepHistoryBounds( layerId, bounds, 0x8ead4f );
 			}
 
-			App.LOG.debug("LH REDO - "+toString());
+			// App.LOG.debug("LH REDO - "+toString());
 		}
 	}
 

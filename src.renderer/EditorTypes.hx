@@ -142,6 +142,15 @@ enum SyncOp {
 enum ImageSyncResult {
 	Ok;
 	FileNotFound;
+	TrimmedPadding;
 	RemapLoss;
 	RemapSuccessful;
+}
+
+enum TilePickerMode {
+	ToolPicker;
+	MultiTiles;
+	SingleTile;
+	ViewOnly;
+	RectOnly;
 }

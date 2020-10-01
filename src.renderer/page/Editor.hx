@@ -169,9 +169,11 @@ class Editor extends Page {
 		return relativePath.full;
 	}
 
-	public function makeFullFilePath(relPath:String) {
-		var fp = dn.FilePath.fromFile( getProjectDir() +"/"+ relPath );
-		return fp.full;
+	public function makeAbsoluteFilePath(relPath:String) {
+		var fp = dn.FilePath.fromFile(relPath);
+		return fp.hasDriveLetter()
+			? fp.full
+			: dn.FilePath.fromFile( getProjectDir() +"/"+ relPath ).full;
 	}
 
 	public function selectProject(p:led.Project) {
@@ -183,7 +185,7 @@ class Editor extends Page {
 
 		// Check external enums
 		for( relPath in project.defs.getExternalEnumPaths() ) {
-			if( !JsTools.fileExists( makeFullFilePath(relPath) ) ) {
+			if( !JsTools.fileExists( makeAbsoluteFilePath(relPath) ) ) {
 				// File not found
 				new ui.modal.dialog.LostFile(relPath, function(newAbsPath) {
 					var newRel = makeRelativeFilePath(newAbsPath);
@@ -192,7 +194,7 @@ class Editor extends Page {
 			}
 			else {
 				// Verify checksum
-				var f = JsTools.readFileString( makeFullFilePath(relPath) );
+				var f = JsTools.readFileString( makeAbsoluteFilePath(relPath) );
 				var checksum = haxe.crypto.Md5.encode(f);
 				for(ed in project.defs.getAllExternalEnumsFrom(relPath) )
 					if( ed.externalFileChecksum!=checksum ) {
@@ -253,11 +255,19 @@ class Editor extends Page {
 				var name = dn.FilePath.fromFile(td.relPath).fileWithExt;
 				new ui.modal.dialog.Warning( Lang.t._("The image ::file:: was updated, but the new version is smaller than the previous one.\nSome tiles might have been lost in the process. It is recommended to check this carefully before saving this project!", { file:name } ) );
 
-			case RemapSuccessful, Ok:
-				if( !silentOk || result!=Ok ) {
+			case TrimmedPadding:
+				var name = dn.FilePath.fromFile(td.relPath).fileWithExt;
+				new ui.modal.dialog.Message( Lang.t._("\"::file::\" image was modified but it was SMALLER than the old version.\nLuckily, the tileset had some PADDING, so I was able to use it to compensate the difference.\nSo everything is ok, have a nice day ♥️", { file:name } ), "tile" );
+
+			case Ok:
+				if( !silentOk ) {
 					var name = dn.FilePath.fromFile(td.relPath).fileWithExt;
 					N.success(Lang.t._("Tileset image ::file:: updated.", { file:name } ) );
 				}
+
+			case RemapSuccessful:
+				var name = dn.FilePath.fromFile(td.relPath).fileWithExt;
+				new ui.modal.dialog.Message( Lang.t._("Tileset image \"::file::\" was reloaded and is larger than the old one.\nTiles coordinates were remapped, everything is ok :)", { file:name } ), "tile" );
 		}
 
 		ge.emit(TilesetDefChanged(td));
@@ -346,6 +356,8 @@ class Editor extends Page {
 				if( idx < curLevel.layerInstances.length )
 					selectLayerInstance( curLevel.layerInstances[idx] );
 
+			case k if( k>=K.F1 && k<=K.F6 && !hasInputFocus() ):
+				jMainPanel.find("#mainBar .buttons button:nth-of-type("+(k-K.F1+1)+")").click();
 
 			#if debug
 
@@ -471,6 +483,59 @@ class Editor extends Page {
 		updateTool();
 	}
 
+	public function getGenericLevelElementAt(m:MouseCoords, ?limitToLayerInstance:led.inst.LayerInstance) : Null<GenericLevelElement> {
+		var ge : GenericLevelElement = null;
+
+		function getElement(li:led.inst.LayerInstance) {
+			if( !levelRender.isLayerVisible(li) )
+				return;
+
+			var cx = m.getLayerCx(li);
+			var cy = m.getLayerCy(li);
+			switch li.def.type {
+				case IntGrid:
+					if( li.getIntGrid(cx,cy)>=0 )
+						ge = GenericLevelElement.IntGrid( li, cx, cy );
+
+				case AutoLayer:
+
+				case Entities:
+					for(ei in li.entityInstances) {
+						if( ei.isOver(m.levelX, m.levelY, 8) )
+							ge = GenericLevelElement.Entity(li, ei);
+						else {
+							// Points
+							for(fi in ei.fieldInstances) {
+								if( fi.def.type!=F_Point )
+									continue;
+								for(i in 0...fi.getArrayLength()) {
+									var pt = fi.getPointGrid(i);
+									if( pt!=null && m.cx==pt.cx && m.cy==pt.cy )
+										ge = GenericLevelElement.PointField(li, ei, fi, i);
+								}
+							}
+						}
+					}
+
+				case Tiles:
+					if( li.getGridTile(cx,cy)!=null )
+						ge = GenericLevelElement.Tile(li, cx, cy);
+			}
+		}
+
+		if( limitToLayerInstance==null ) {
+			// Search in all layers
+			var all = project.defs.layers.copy();
+			all.reverse();
+			for(ld in all)
+				getElement( curLevel.getLayerInstance(ld) );
+		}
+		else
+			getElement(limitToLayerInstance);
+
+		return ge;
+	}
+
 	public function pickGenericLevelElement(ge:Null<GenericLevelElement>) {
 		clearSpecialTool();
 		switch ge {
@@ -555,13 +620,37 @@ class Editor extends Page {
 
 	function onMouseMove(e:hxd.Event) {
 		var m = getMouse();
+
+		// Manual updates
 		curTool.onMouseMove(m);
 		rulers.onMouseMove(m);
 
+		// Mouse coords infos
 		jMouseCoords.empty();
 		if( curLayerInstance!=null )
 			jMouseCoords.append('<span>Grid = ${m.cx},${m.cy}</span>');
 		jMouseCoords.append('<span>Pixels = ${m.levelX},${m.levelY}</span>');
+
+		// Overed element infos
+		var overed = getGenericLevelElementAt(m, !App.ME.isAltDown() || !App.ME.isShiftDown() ? curLayerInstance : null);
+		switch overed {
+			case null:
+			case IntGrid(li, cx, cy):
+				var v = li.getIntGrid(cx,cy);
+				var c = C.intToHex( C.toWhite( li.def.getIntGridValueColor(v), 0.66 ) );
+				jMouseCoords.prepend('<span style="color:$c">${ li.def.getIntGridValueDisplayName(v) } (IntGrid)</span>');
+
+			case Entity(li, ei):
+				var c = C.intToHex( C.toWhite( ei.def.color, 0.66 ) );
+				jMouseCoords.prepend('<span style="color:$c">${ ei.def.identifier } (Entity)</span>');
+
+			case Tile(li, cx, cy):
+				jMouseCoords.prepend('<span>${ li.getGridTile(cx,cy) } (Tile)</span>');
+
+			case PointField(li, ei, fi, arrayIdx):
+				var c = C.intToHex( C.toWhite( ei.def.color, 0.66 ) );
+				jMouseCoords.prepend('<span style="color:$c">${ ei.def.identifier }.${ fi.def.identifier } (Entity point)</span>');
+		}
 	}
 
 	function onMouseWheel(e:hxd.Event) {
@@ -668,6 +757,10 @@ class Editor extends Page {
 
 		var data = JsTools.prepareProjectFile(project);
 		JsTools.writeFileBytes(projectFilePath, data.bytes);
+
+		if( project.exportTiled )
+			new exporter.Tiled( project, projectFilePath );
+
 		needSaving = false;
 		App.ME.registerRecentProject(projectFilePath);
 
@@ -871,9 +964,9 @@ class Editor extends Page {
 
 	function updateTitle() {
 		App.ME.setWindowTitle(
-			project.name
+			dn.FilePath.extractFileName(projectFilePath)
 			+ ( needSaving ? " [UNSAVED]" : "" )
-			+ ( curLevel!=null ? " ("+curLevel.identifier+")" : "" )
+			+ ( curLevel!=null ? "  @ "+curLevel.identifier : "" )
 		);
 		// jMainPanel.find("h2#levelName").text( curLevel.getName() );
 	}
@@ -960,7 +1053,7 @@ class Editor extends Page {
 				ev.preventDefault();
 				ev.stopPropagation();
 				selectLayerInstance(li);
-				new ui.modal.panel.EditAutoLayerRules();
+				new ui.modal.panel.EditAllAutoLayerRules();
 			});
 
 			// Visibility button

@@ -42,7 +42,7 @@ class LayerDef {
 		return '$identifier($type, ${gridSize}px)';
 	}
 
-	public static function fromJson(jsonVersion:String, json:Dynamic) {
+	public static function fromJson(jsonVersion:String, json:led.Json.LayerDefJson) {
 		var o = new LayerDef( JsonTools.readInt(json.uid), JsonTools.readEnum(LayerType, json.type, false));
 		o.identifier = JsonTools.readString(json.identifier, "Layer"+o.uid);
 		o.gridSize = JsonTools.readInt(json.gridSize, Project.DEFAULT_GRID_SIZE);
@@ -80,8 +80,10 @@ class LayerDef {
 		return o;
 	}
 
-	public function toJson() {
+	public function toJson() : led.Json.LayerDefJson {
 		return {
+			__type: Std.string(type),
+
 			identifier: identifier,
 			type: JsonTools.writeEnum(type, false),
 			uid: uid,
@@ -117,13 +119,18 @@ class LayerDef {
 		});
 	}
 
-	public function getIntGridValueDef(idx:Int) : Null<IntGridValueDef> {
+	public inline function getIntGridValueDef(idx:Int) : Null<IntGridValueDef> {
 		return intGridValues[idx];
 	}
 
-	public function getIntGridValueName(idx:Int) : Null<String> {
+	public inline function getIntGridValueDisplayName(idx:Int) : Null<String> {
 		var vd = getIntGridValueDef(idx);
-		return vd==null ? null : vd.identifier==null ? "#"+idx : vd.identifier;
+		return vd==null ? null : vd.identifier==null ? '#$idx' : '#$idx (${vd.identifier})';
+	}
+
+	public inline function getIntGridValueColor(idx:Int) : Null<UInt> {
+		var vd = getIntGridValueDef(idx);
+		return vd==null ? null : vd.color;
 	}
 
 	public inline function getAllIntGridValues() return intGridValues;

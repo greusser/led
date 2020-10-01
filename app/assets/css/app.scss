@@ -655,6 +655,52 @@ ul.niceList {
 	}
 }
 
+ul.tabs {
+	display: flex;
+	flex-wrap: nowrap;
+	margin-bottom: 16px;
+	padding-top: 4px;
+	padding-left: 4px;
+	justify-items: flex-end;
+
+	background-color: $bgDark;
+	border-bottom: 1px solid $orange;
+	box-shadow: 0px -4px 0px black inset;
+	// overflow-y: hidden;
+
+	li {
+		font-family: Roboto;
+		margin-top: 8px;
+		padding: 8px;
+		padding-bottom: 4px;
+
+		color: $orange;
+		background-color: $bgMed;
+		box-shadow: 2px -2px 2px rgba(0, 0, 0, 0.3);
+		cursor: pointer;
+		border-top-left-radius: 3px;
+		border-top-right-radius: 3px;
+
+		&+li {
+			margin-left: 8px;
+		}
+
+		&.active {
+			color: black;
+			font-weight: bold;
+			background-color: $orange;
+			padding-bottom: 8px;
+			margin-top: 0;
+		}
+
+		&:hover:not(.active) {
+			color: white;
+			padding-bottom: 6px;
+			margin-top: 6px;
+		}
+	}
+}
+
 ul.log {
 	box-sizing: border-box;
 	padding: 4px;
@@ -1131,7 +1177,9 @@ textarea {
 		.content {
 			color: #acd6f7;
 			font-family: monospace;
+			font-size: 7pt;
 			white-space: nowrap;
+			overflow-x: hidden;
 			.text {
 				font-style: normal;
 			}
@@ -1341,6 +1389,33 @@ textarea {
 		border-color: $red;
 	}
 
+	&.message .wrapper {
+		max-width: 400px;
+		p {
+			margin: 0;
+		}
+		*+p {
+			margin-top: 1em;
+		}
+	}
+	&.message.hasIcon .content {
+		display: grid;
+		gap: 16px;
+		grid-template-columns: min-content auto;
+		align-items: stretch;
+
+		.iconWrapper {
+			padding: 16px;
+			background-color: black;
+			border-radius: 8px;
+
+			.icon {
+				width: 4em;
+				height: 4em;
+			}
+		}
+	}
+
 	&.centered {
 		display: grid;
 		align-items: center;
@@ -1385,6 +1460,30 @@ textarea {
 		h2 .file {
 			color: white;
 			text-transform: none;
+		}
+	}
+}
+
+.window.logPrint {
+	.wrapper .content {
+		max-width: 500px;
+
+		ul.log {
+			min-width: auto;
+			li {
+				font-family: monospace;
+				white-space: pre-wrap;
+				border-left: 4px solid $bgLight;
+				padding-left: 8px;
+				color: white;
+			}
+			li.critical {
+				border-top: 1px solid $bgLight;
+				border-bottom: 1px solid $bgLight;
+				border-right: 1px solid $bgLight;
+				padding-top: 8px;
+				padding-bottom: 8px;
+			}
 		}
 	}
 }
@@ -1445,6 +1544,11 @@ textarea {
 			margin: 0;
 
 			font-family: Roboto;
+		}
+
+		span.misc {
+			margin-left: 3px;
+			margin-right: 3px;
 		}
 
 
@@ -2087,7 +2191,7 @@ canvas#webgl {
 				margin: 0;
 			}
 
-			.changelog {
+			.changelogs {
 				padding: 16px;
 				box-sizing: border-box;
 				margin-top: 8px;
@@ -2104,20 +2208,18 @@ canvas#webgl {
 					margin-bottom: 8px;
 				}
 
-				#changelogHtml {
-					// overflow-y: auto;
+				.markdown {
 					font-size: 10pt;
 					color: #b5becd;
 
 					h1 {
-						display: none;
-					}
-
-					h1+h2 {
-						margin-top: 0;
+						padding-bottom: 8px;
+						margin-bottom: 8px;
+						border-bottom: 1px solid $orange;
 					}
 
 					h2 {
+						border: none;
 						margin-top: 32px;
 						margin-bottom: 8px;
 						text-transform: none;
@@ -2149,7 +2251,7 @@ canvas#webgl {
 					}
 				}
 
-				#changelogMd {
+				.rawMarkdown {
 					display: none;
 				}
 			}
@@ -2795,9 +2897,7 @@ body.sorting ul.collapsedSortTarget {
 	display: block !important;
 }
 
-.window.panel.editAutoLayerRules {
-	// width: 100vw;
-
+.window.panel.editAllAutoLayerRules {
 	.wrapper {
 		padding: 8px;
 	}
@@ -3027,7 +3127,7 @@ body.sorting ul.collapsedSortTarget {
 
 						.options {
 							display: grid;
-							grid-template-columns: repeat(4, auto);
+							grid-template-columns: repeat(5, auto);
 							gap: 2px;
 
 							&>* {
@@ -3040,7 +3140,7 @@ body.sorting ul.collapsedSortTarget {
 							}
 
 							.random {
-								grid-column: 1/5;
+								grid-column: 1/4;
 								display: flex;
 								flex-wrap: nowrap;
 								align-items: center;
@@ -3066,6 +3166,26 @@ body.sorting ul.collapsedSortTarget {
 									font-size: 8pt;
 									color: $bgLighter;
 									padding-right: 8px;
+								}
+							}
+
+							input[name=xModulo] {
+								grid-column: 4/5;
+							}
+							input[name=yModulo] {
+								grid-column: 5/6;
+							}
+							input[name=xModulo],
+							input[name=yModulo] {
+								width: 20px;
+								font-size: 9pt;
+								text-align: center;
+								color: $help;
+								&:not(.default) {
+									border: 1px solid $green;
+								}
+								&.default {
+									color: $bgLighter;
 								}
 							}
 
@@ -3189,7 +3309,6 @@ $patternSize : 32px;
 		.cell.empty {
 			background: $bgMed;
 			box-shadow: none;
-			// border-color: $bgLighter;
 			border: none;
 		}
 		.cell.center {
@@ -3226,6 +3345,17 @@ $patternSize : 32px;
 			margin-left: -75%;
 			margin-top: -75%;
 		}
+	}
+
+	.stampPreview {
+		position: absolute;
+		z-index: 10;
+		box-sizing: border-box;
+
+		box-shadow: 0px 0px 4px black inset, 0px 0px 8px black inset, 0px 0px 8px black;
+		border: 3px solid $orange;
+		outline: 2px solid black;
+		pointer-events: none;
 	}
 
 	.cell {
@@ -3315,13 +3445,23 @@ $patternSize : 32px;
 		}
 	}
 }
-.window.dialog.autoPatternEditor {
+
+
+.window.dialog.ruleEditor {
 	.content {
 		padding: 4px;
 		display: grid;
 		gap: 16px;
 		grid-template-columns: repeat(3, min-content);
 		align-items: center;
+
+		.infos {
+			position: absolute;
+			right: 3px;
+			bottom: 3px;
+			font-size: 8pt;
+			color: $bgLighter;
+		}
 
 		.explain, .help {
 			grid-column: 1/4;
@@ -3333,7 +3473,7 @@ $patternSize : 32px;
 			text-align: center;
 		}
 
-		label {
+		>div>label {
 			display: block;
 			margin-bottom: 4px;
 			color: $bgLighter;
@@ -3342,8 +3482,17 @@ $patternSize : 32px;
 
 		.tiles {
 			display: grid;
-			grid-template-rows: min-content auto;
+			justify-items: center;
+			grid-template-rows: repeat(2,min-content) auto;
 			height: 100%;
+
+			select {
+				margin-bottom: 4px;
+			}
+			.wrapper {
+				display: grid;
+				justify-items: center;
+			}
 
 			canvas {
 				image-rendering: pixelated;

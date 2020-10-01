@@ -1,6 +1,8 @@
 package led.def;
 
 class AutoLayerRuleDef {
+	#if heaps // Required to avoid doc generator to explore code too deeply
+
 	public var uid(default,null) : Int;
 
 	public var tileIds : Array<Int> = [];
@@ -10,12 +12,18 @@ class AutoLayerRuleDef {
 	public var flipX = false;
 	public var flipY = false;
 	public var active = true;
+	public var tileMode : led.LedTypes.AutoLayerRuleTileMode = Single;
+	public var pivotX = 0.;
+	public var pivotY = 0.;
+	public var xModulo = 1;
+	public var yModulo = 1;
+	public var checker : led.LedTypes.AutoLayerRuleCheckerMode = None;
 
 	var perlinActive = false;
 	public var perlinSeed : Int;
 	public var perlinScale : Float = 0.2;
 	public var perlinOctaves = 2;
-	var _perlin(get,default) : Null<hxd.Perlin>;
+	var _perlin(get,null) : Null<hxd.Perlin>;
 
 	public function new(uid, size=3) {
 		if( !isValidSize(size) )
@@ -93,11 +101,7 @@ class AutoLayerRuleDef {
 	}
 
 	public function toJson() {
-		if( flipX && isSymetricX() )
-			flipX = false;
-
-		if( flipY && isSymetricY() )
-			flipY = false;
+		tidy();
 
 		return {
 			uid: uid,
@@ -108,6 +112,12 @@ class AutoLayerRuleDef {
 			pattern: pattern.copy(), // WARNING: could leak to undo/redo leaks if (one day) pattern contained objects
 			flipX: flipX,
 			flipY: flipY,
+			xModulo: xModulo,
+			yModulo: yModulo,
+			checker: JsonTools.writeEnum(checker, false),
+			tileMode: JsonTools.writeEnum(tileMode, false),
+			pivotX: JsonTools.writeFloat(pivotX),
+			pivotY: JsonTools.writeFloat(pivotY),
 
 			perlinActive: perlinActive,
 			perlinSeed: perlinSeed,
@@ -124,6 +134,12 @@ class AutoLayerRuleDef {
 		r.pattern = json.pattern;
 		r.flipX = JsonTools.readBool(json.flipX, false);
 		r.flipY = JsonTools.readBool(json.flipY, false);
+		r.checker = JsonTools.readEnum(led.LedTypes.AutoLayerRuleCheckerMode, json.checker, false, None);
+		r.tileMode = JsonTools.readEnum(led.LedTypes.AutoLayerRuleTileMode, json.tileMode, false, Single);
+		r.pivotX = JsonTools.readFloat(json.pivotX, 0);
+		r.pivotY = JsonTools.readFloat(json.pivotY, 0);
+		r.xModulo = JsonTools.readInt(json.xModulo, 1);
+		r.yModulo = JsonTools.readInt(json.yModulo, 1);
 
 		r.perlinActive = JsonTools.readBool(json.perlinActive, false);
 		r.perlinScale = JsonTools.readFloat(json.perlinScale, 0.2);
@@ -192,11 +208,11 @@ class AutoLayerRuleDef {
 		return tileIds.length==0;
 	}
 
-	public function matches(source:led.inst.LayerInstance, cx:Int, cy:Int, dirX=1, dirY=1) {
+	public function matches(li:led.inst.LayerInstance, source:led.inst.LayerInstance, cx:Int, cy:Int, dirX=1, dirY=1) {
 		if( tileIds.length==0 )
 			return false;
 
-		if( chance<=0 || chance<1 && dn.M.randSeedCoords(source.seed, cx,cy, 100) >= chance*100 )
+		if( chance<=0 || chance<1 && dn.M.randSeedCoords(li.seed+uid, cx,cy, 100) >= chance*100 )
 			return false;
 
 		if( hasPerlin() && _perlin.perlin(perlinSeed, cx*perlinScale, cy*perlinScale, perlinOctaves) < 0 )
@@ -233,9 +249,33 @@ class AutoLayerRuleDef {
 		return true;
 	}
 
+	public function tidy() {
+		var anyFix = false;
+
+		if( flipX && isSymetricX() ) {
+			flipX = false;
+			anyFix = true;
+		}
+
+		if( flipY && isSymetricY() ) {
+			flipY = false;
+			anyFix = true;
+		}
+
+		if( xModulo==1 && yModulo==1 && checker!=None ) {
+			checker = None;
+			anyFix = true;
+		}
+
+		if( trim() )
+			anyFix = true;
+
+		return anyFix;
+	}
 
 	public function getRandomTileForCoord(seed:Int, cx:Int,cy:Int) : Int {
 		return tileIds[ dn.M.randSeedCoords( seed, cx,cy, tileIds.length ) ];
 	}
 
+	#end
 }

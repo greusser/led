@@ -1,6 +1,8 @@
 package ui.modal.panel;
 
-class EditAutoLayerRules extends ui.modal.Panel {
+import led.LedTypes;
+
+class EditAllAutoLayerRules extends ui.modal.Panel {
 	var invalidatedRules : Map<Int,Int> = new Map();
 
 	public var li(get,never) : led.inst.LayerInstance;
@@ -14,7 +16,7 @@ class EditAutoLayerRules extends ui.modal.Panel {
 	public function new() {
 		super();
 
-		loadTemplate("editAutoLayerRules");
+		loadTemplate("editAllAutoLayerRules");
 		setTransparentMask();
 		updatePanel();
 	}
@@ -109,7 +111,7 @@ class EditAutoLayerRules extends ui.modal.Panel {
 
 
 			var jNewRule = jContent.find("[ruleUid="+r.uid+"]"); // BUG fix scrollbar position
-			new ui.modal.dialog.AutoPatternEditor(jNewRule, ld, lastRule );
+			new ui.modal.dialog.RuleEditor(jNewRule, ld, lastRule );
 		}
 
 
@@ -263,9 +265,10 @@ class EditAutoLayerRules extends ui.modal.Panel {
 
 				// Preview
 				var jPreview = jRule.find(".preview");
-				JsTools.createAutoPatternGrid(r, ld, true).appendTo(jPreview);
+				var sourceDef = ld.type==AutoLayer ? project.defs.getLayerDef(ld.autoSourceLayerDefUid) : ld;
+				JsTools.createAutoPatternGrid(r, sourceDef, true).appendTo(jPreview);
 				jPreview.click( function(ev) {
-					new ui.modal.dialog.AutoPatternEditor(jPreview, ld, r);
+					new ui.modal.dialog.RuleEditor(jPreview, ld, r);
 				});
 
 				// Random
@@ -277,6 +280,22 @@ class EditAutoLayerRules extends ui.modal.Panel {
 					i.jInput.addClass("max");
 				else if( r.chance<=0 )
 					i.jInput.addClass("off");
+
+				// X modulo
+				var i = Input.linkToHtmlInput( r.xModulo, jRule.find("[name=xModulo]"));
+				i.onChange = function() r.tidy();
+				i.linkEvent( LayerRuleChanged(r) );
+				i.setBounds(1,10);
+				if( r.xModulo==1 )
+					i.jInput.addClass("default");
+
+				// Y modulo
+				var i = Input.linkToHtmlInput( r.yModulo, jRule.find("[name=yModulo]"));
+				i.onChange = function() r.tidy();
+				i.linkEvent( LayerRuleChanged(r) );
+				i.setBounds(1,10);
+				if( r.yModulo==1 )
+					i.jInput.addClass("default");
 
 				// Flip-X
 				var jFlag = jRule.find("a.flipX");
@@ -310,15 +329,46 @@ class EditAutoLayerRules extends ui.modal.Panel {
 				jFlag.mousedown( function(ev:js.jquery.Event) {
 					ev.preventDefault();
 					if( ev.button==2 ) {
+						new ui.modal.dialog.RulePerlinSettings(jFlag, r);
 						if( !r.hasPerlin() ) {
-							N.error("Perlin isn't enabled");
-						}
-						else {
-							new ui.modal.dialog.RulePerlinSettings(jFlag, r);
+							r.setPerlin(true);
+							editor.ge.emit( LayerRuleChanged(r) );
 						}
 					}
 					else {
 						r.setPerlin( !r.hasPerlin() );
+						editor.ge.emit( LayerRuleChanged(r) );
+					}
+				});
+
+				// Checker
+				var jFlag = jRule.find("a.checker");
+				jFlag.addClass( r.checker!=None ? "on" : "off" );
+				jFlag.mousedown( function(ev:js.jquery.Event) {
+					if( r.xModulo==1 && r.yModulo==1 ) {
+						N.error("Checker mode needs X or Y modulo greater than 1.");
+						return;
+					}
+					ev.preventDefault();
+					if( ev.button==2 ) {
+						var m = new Dialog(jFlag);
+						for(k in [AutoLayerRuleCheckerMode.Horizontal, AutoLayerRuleCheckerMode.Vertical]) {
+							var name = k.getName();
+							var jRadio = new J('<input name="mode" type="radio" value="$name" id="$name"/>');
+							jRadio.change( function(ev:js.jquery.Event) {
+								r.checker = k;
+								editor.ge.emit( LayerRuleChanged(r) );
+							});
+							m.jContent.append(jRadio);
+							m.jContent.append('<label for="$name">$name</label>');
+						}
+
+						if( r.checker==None )
+							r.checker = r.xModulo==1 ? Vertical : Horizontal;
+						m.jContent.find("[name=mode][value="+r.checker.getName()+"]").click();
+					}
+					else {
+						r.checker = r.checker==None ? ( r.xModulo==1 ? Vertical : Horizontal ) : None;
 						editor.ge.emit( LayerRuleChanged(r) );
 					}
 				});

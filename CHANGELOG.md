@@ -1,6 +1,38 @@
-# LEd release notes
+# 0.3.2-beta
 
-## 0.2.0-beta
+ - **Tiled (TMX) export option**: from the project settings (`F1`), check the *Tiled export* option to save Tiled compatible files along with the LEd JSON.
+
+    **DISCLAIMER**: this export is limited because Tiled doesn't support some core features from LEd, like different grid sizes in the same level or Array of properties in Entities. This export is only meant as a short-term solution to quickly load LEd data in a framework only supporting TMX files. See [documentation](https://deepnight.net/docs/led/json/tiled/) for more informations.
+
+# 0.3.1-beta
+
+ - Added an automated JSON format documentation generator (see [JSON_DOC.md](https://github.com/deepnight/led/blob/master/JSON_DOC.md) in sources)
+
+# 0.3.0-beta
+
+ - **Group of tiles in auto-layer rules**: this new feature allows you to place larger objects (eg. *a tree, a big rock, etc.*) made of multiple tiles using just auto-layer rules.
+ - Added **Modulo** options for auto-layer rules: this allows a rule to only apply every X columns or Y rows.
+ - Added **Checker mode** for auto-layer rules: this makes effects like "brick walls" or "Sonic checker effect" possible ;)
+ - **Better hot-reloading**: when a tileset images changes on the disk, LEd will automatically remap tile coordinates if the image size changes. This feature now also works to remap auto-layer tiles.
+ - **JSON changes**: please check the new [JSON_CHANGELOG.md](https://github.com/deepnight/led/blob/master/JSON_CHANGELOG.md) for up-to-date changes to JSON format.
+ - Fixed image import that failed if the image file was standing on a different drive than the project file.
+ - Fixed rule `random` function giving identical results for different rules
+ - Fixed a crash while editing rules in *pure* auto-layers.
+ - Fixed a crash when Undo history reaches its max (might need more rework).
+ - Prepared support for Mac & Linux versions
+ - Minor fixes for Linux builds
+ - Updated `Samples`
+ - Bug fixes
+
+
+# 0.2.1-beta
+
+ - Added `F1`-`F6` key shortcuts for all editor panels
+ - Updated JSON file format with some extra dev-friendly values
+ - Added a JSON changelog file for devs working on importers
+ - Add JSON changelog to app start page
+
+# 0.2.0-beta
 
  - **Beta version!**: LEd is now stable enough to be used in production and retro-compatibility will be guaranteed from now on.
  - **Radius**: Integer and Float entity fields can now be displayed as a radius around the entity (eg. a "lightRadius" Float value can now be displayed accordingly right in the editor display). See `Samples` for some examples.
@@ -24,7 +56,7 @@
  - Updated `Samples`
  - Bug fixes
 
-## 0.1.7-alpha
+# 0.1.7-alpha
 
  - **Array of entity fields**: any field type in an Entity can now be an Array. For example, you could have an Array of Enums to represent the items hidden inside a Cratebox entity. See `Samples` for some examples.
  - **Point coordinates & paths**: this new entity field type allows you to pick a grid coordinates. And if you combine this with the new Array support, you can even build paths of points! See `Samples` for some examples.
@@ -36,7 +68,7 @@
  - Updated Haxe API
  - Bug fixes
 
-## 0.1.6-alpha
+# 0.1.6-alpha
 
  - **"Pure" auto-layers**: these layers only have rules and use a separate IntGrid layer as source for their value checks. Very useful to have a separate auto-layer that contains drop-shadows of walls, for example. You can have any number of pure auto-layers using the same single IntGrid source.
  - Grid lock (formerly grid snap) now uses `L` key shortcut instead of G
@@ -50,7 +82,7 @@
  - Fixed bugs
  - Added some internal app logging for debugging purpose (no sensitive data, don't worry)
 
-## 0.1.5-alpha
+# 0.1.5-alpha
 
  - **Auto-layers**: IntGrid layers can now render themselves automatically by drawing tiles based on their content. You can create "patterns of IntGrid values" (called **Rules**) to decide when a specific tile, or group of random tiles, should appear. It can for example be used to:
    - add random grass or rocks on top of platforms,
@@ -73,7 +105,7 @@
  - Many UI/UX fixes
  - Bug fixes
 
-## 0.0.4-alpha
+# 0.0.4-alpha
 
  - Added nice **movement animations** to the tool palette when picking a value with the ALT+click shortcut
  - Reworked the code of the tool palette to be much simpler
@@ -90,7 +122,7 @@
  - Updated home
  - Many minor **UI polishing**
 
-## 0.0.3-alpha
+# 0.0.3-alpha
 
  - Better **Entity instance fields editor**
  - Better **auto-update UI**
@@ -101,14 +133,14 @@
  - Added a brief notification when switching layers using picking
  - Code: Electron cleanup
 
-## 0.0.2-alpha
+# 0.0.2-alpha
 
  - **Release notes**: added release notes to app Home page
  - Adjusted grid opacity
  - Bug fixes
  - Dev scripts cleanup
 
-## 0.0.1-alpha
+# 0.0.1-alpha
 
  - **Alpha release**: this version is only for early testing & feedback purpose.
  - **Auto updater**: Added support for built-in Electron auto-updater
