@@ -25,18 +25,23 @@ class Editor extends Page {
 	public var projectFilePath : String;
 	public var curLevelId : Int;
 	var curLayerDefUid : Int;
-	public var curTool(get,never) : Tool<Dynamic>;
-	var allLayerTools : Map<Int,Tool<Dynamic>> = new Map();
-	var specialTool : Null< Tool<Dynamic> >; // is not null, will be used instead of default tool
+
+	// Tools
+	public var curTool(get,never) : tool.LayerTool<Dynamic>;
+	public var selectionTool: tool.SelectionTool;
+	var allLayerTools : Map<Int,tool.LayerTool<Dynamic>> = new Map();
+	var specialTool : Null< Tool<Dynamic> >; // if not null, will be used instead of default tool
+	var doNothingTool : tool.lt.DoNothing;
+
 	var gridSnapping = true;
 	public var needSaving = false;
+	public var singleLayerMode(default,null) = false;
+	public var emptySpaceSelection(default,null) = true;
 
 	public var levelRender : display.LevelRender;
 	public var rulers : display.Rulers;
 	var bg : h2d.Bitmap;
 	public var cursor : ui.Cursor;
-	public var selection : Null<GenericLevelElement>;
-	var selectionCursor : ui.Cursor;
 
 	var levelHistory : Map<Int,LevelHistory> = new Map();
 	public var curLevelHistory(get,never) : LevelHistory;
@@ -67,11 +72,12 @@ class Editor extends Page {
 
 		cursor = new ui.Cursor();
 		cursor.canChangeSystemCursors = true;
-		selectionCursor = new ui.Cursor();
-		selectionCursor.enablePermanentHighlights();
 
 		levelRender = new display.LevelRender();
 		rulers = new display.Rulers();
+
+		selectionTool = new tool.SelectionTool();
+		doNothingTool = new tool.lt.DoNothing();
 
 		initUI();
 		updateCanvasSize();
@@ -135,10 +141,16 @@ class Editor extends Page {
 			onHelp();
 		});
 
-		jMainPanel.find("input#enhanceActiveLayer")
-			.prop("checked", levelRender.enhanceActiveLayer)
+		jMainPanel.find("input#singleLayerMode")
+			.prop("checked", singleLayerMode)
 			.change( function(ev) {
-				levelRender.setEnhanceActiveLayer( ev.getThis().prop("checked") );
+				setSingleLayerMode( ev.getThis().prop("checked") );
+			});
+
+		jMainPanel.find("input#emptySpaceSelection")
+			.prop("checked", emptySpaceSelection)
+			.change( function(ev) {
+				setEmptySpaceSelection( ev.getThis().prop("checked") );
 			});
 
 
@@ -231,7 +243,7 @@ class Editor extends Page {
 		for( td in project.defs.tilesets )
 			watcher.watchTileset(td);
 
-		clearSelection();
+		selectionTool.clear();
 	}
 
 
@@ -286,8 +298,12 @@ class Editor extends Page {
 					clearSpecialTool();
 				else if( ui.Modal.hasAnyOpen() )
 					ui.Modal.closeAll();
-				else
-					clearSelection();
+				else if( selectionTool.any() ) {
+					ui.EntityInstanceEditor.close();
+					selectionTool.clear();
+				}
+				else if( ui.EntityInstanceEditor.isOpen() )
+					ui.EntityInstanceEditor.close();
 
 			case K.TAB:
 				if( !ui.Modal.hasAnyOpen() ) {
@@ -334,9 +350,26 @@ class Editor extends Page {
 			case K.Q if( App.ME.isCtrlDown() ):
 				App.ME.exit();
 
+			case K.E if( !hasInputFocus() && !App.ME.hasAnyToggleKeyDown() ):
+				setEmptySpaceSelection( !emptySpaceSelection );
+
 			case K.A if( !hasInputFocus() && !App.ME.hasAnyToggleKeyDown() ):
-				levelRender.setEnhanceActiveLayer( !levelRender.enhanceActiveLayer );
-				N.quick( "Active layer enhancement: "+( levelRender.enhanceActiveLayer ? "ON" : "off" ));
+				setSingleLayerMode( !singleLayerMode );
+
+			case K.A if( !hasInputFocus() && App.ME.isCtrlDown() ):
+				if( singleLayerMode )
+					selectionTool.selectAllInLayers(curLevel, [curLayerInstance]);
+				else
+					selectionTool.selectAllInLayers(curLevel, curLevel.layerInstances);
+
+				if( !selectionTool.isEmpty() ) {
+					if( singleLayerMode )
+						N.quick( L.t._("Selected all in layer") );
+					else
+						N.quick( L.t._("Selected all") );
+				}
+				else
+					N.error("Nothing to select");
 
 			case K.L if( !hasInputFocus() && !App.ME.hasAnyToggleKeyDown() ):
 				gridSnapping = !gridSnapping;
@@ -374,69 +407,28 @@ class Editor extends Page {
 			#end
 		}
 
-		// Propagate to current tool
-		if( !hasInputFocus() && !ui.Modal.hasAnyOpen() )
-			curTool.onKeyPress(keyCode);
-	}
-
-
-	public function setSelection(ge:GenericLevelElement) {
-		switch ge {
-			case IntGrid(_), Tile(_):
-				clearSelection();
-				return;
-
-			case PointField(_):
-
-			case Entity(_):
-		}
-
-		selection = ge;
-		selectionCursor.set(switch selection {
-			case IntGrid(li, cx, cy): GridCell(li, cx,cy);
-			case Entity(li, ei): Entity(li, ei.def, ei, ei.x, ei.y);
-			case Tile(li,cx,cy): Tiles(li, [li.getGridTile(cx,cy)], cx,cy);
-			case PointField(li, ei, fi, arrayIdx):
-				var pt = fi.getPointGrid(arrayIdx);
-				GridCell(li, pt.cx, pt.cy);
-		});
-
-		ui.EntityInstanceEditor.close();
-		switch selection {
-			case null:
-			case IntGrid(_):
-			case Tile(_):
-
-			case PointField(li, ei, fi, arrayIdx):
-				new ui.EntityInstanceEditor(ei);
-
-			case Entity(li, instance):
-				new ui.EntityInstanceEditor(instance);
+		// Propagate to tools
+		if( !hasInputFocus() && !ui.Modal.hasAnyOpen() ) {
+			if( isSpecialToolActive() )
+				specialTool.onKeyPress(keyCode);
+			else {
+				selectionTool.onKeyPress(keyCode);
+				curTool.onKeyPress(keyCode);
+			}
 		}
 	}
 
-	public function clearSelection() {
-		selection = null;
-		selectionCursor.set(None);
 
-		// Close if using default curLayer tool
-		if( curTool==allLayerTools.get(curLayerDefUid) )
-			ui.EntityInstanceEditor.close();
-	}
-
-	function get_curTool() : Tool<Dynamic> {
-		if( specialTool!=null )
-			return specialTool;
-
+	function get_curTool() : tool.LayerTool<Dynamic> {
 		if( curLayerDef==null )
-			return new tool.EmptyTool();
+			return doNothingTool;
 
 		if( !allLayerTools.exists(curLayerDef.uid) ) {
-			var t : Tool<Dynamic> = switch curLayerDef.type {
-				case AutoLayer: new tool.EmptyTool();
-				case IntGrid: new tool.IntGridTool();
-				case Entities: new tool.EntityTool();
-				case Tiles: new tool.TileTool();
+			var t : tool.LayerTool<Dynamic> = switch curLayerDef.type {
+				case AutoLayer: new tool.lt.DoNothing();
+				case IntGrid: new tool.lt.IntGridTool();
+				case Entities: new tool.lt.EntityTool();
+				case Tiles: new tool.lt.TileTool();
 			}
 			t.initPalette();
 			allLayerTools.set( curLayerInstance.layerDefUid, t );
@@ -472,7 +464,7 @@ class Editor extends Page {
 		}
 	}
 
-	public inline function isUsingSpecialTool(?tClass:Class<Tool<Dynamic>>) {
+	public inline function isSpecialToolActive(?tClass:Class<Tool<Dynamic>>) {
 		return specialTool!=null && !specialTool.destroyed
 			&& ( tClass==null || Std.is(specialTool, tClass) );
 	}
@@ -483,25 +475,28 @@ class Editor extends Page {
 		updateTool();
 	}
 
-	public function getGenericLevelElementAt(m:MouseCoords, ?limitToLayerInstance:led.inst.LayerInstance) : Null<GenericLevelElement> {
-		var ge : GenericLevelElement = null;
-
+	public function getGenericLevelElementAt(levelX:Int, levelY:Int, limitToActiveLayer=false) : Null<GenericLevelElement> {
 		function getElement(li:led.inst.LayerInstance) {
-			if( !levelRender.isLayerVisible(li) )
-				return;
+			var ge : GenericLevelElement = null;
 
-			var cx = m.getLayerCx(li);
-			var cy = m.getLayerCy(li);
+			if( !levelRender.isLayerVisible(li) )
+				return null;
+
+			var layerX = levelX - li.pxOffsetX;
+			var layerY = levelY - li.pxOffsetY;
+			var cx = Std.int( layerX / li.def.gridSize );
+			var cy = Std.int( layerY / li.def.gridSize );
+
 			switch li.def.type {
 				case IntGrid:
 					if( li.getIntGrid(cx,cy)>=0 )
-						ge = GenericLevelElement.IntGrid( li, cx, cy );
+						ge = GenericLevelElement.GridCell( li, cx, cy );
 
 				case AutoLayer:
 
 				case Entities:
 					for(ei in li.entityInstances) {
-						if( ei.isOver(m.levelX, m.levelY, 8) )
+						if( ei.isOver(layerX, layerY, 0) )
 							ge = GenericLevelElement.Entity(li, ei);
 						else {
 							// Points
@@ -510,7 +505,7 @@ class Editor extends Page {
 									continue;
 								for(i in 0...fi.getArrayLength()) {
 									var pt = fi.getPointGrid(i);
-									if( pt!=null && m.cx==pt.cx && m.cy==pt.cy )
+									if( pt!=null && cx==pt.cx && cy==pt.cy )
 										ge = GenericLevelElement.PointField(li, ei, fi, i);
 								}
 							}
@@ -519,75 +514,81 @@ class Editor extends Page {
 
 				case Tiles:
 					if( li.getGridTile(cx,cy)!=null )
-						ge = GenericLevelElement.Tile(li, cx, cy);
+						ge = GenericLevelElement.GridCell(li, cx, cy);
 			}
+			return ge;
 		}
 
-		if( limitToLayerInstance==null ) {
+
+		if( limitToActiveLayer )
+			return getElement(curLayerInstance);
+		else {
 			// Search in all layers
 			var all = project.defs.layers.copy();
 			all.reverse();
-			for(ld in all)
-				getElement( curLevel.getLayerInstance(ld) );
-		}
-		else
-			getElement(limitToLayerInstance);
+			var best = null;
+			for(ld in all) {
+				var ge = getElement( curLevel.getLayerInstance(ld) );
+				if( ld==curLayerDef && ge!=null && singleLayerMode ) // prioritize active layer
+					return ge;
 
-		return ge;
+				if( ge!=null )
+					best = ge;
+			}
+
+			return best;
+		}
 	}
 
-	public function pickGenericLevelElement(ge:Null<GenericLevelElement>) {
-		clearSpecialTool();
-		switch ge {
-			case null:
+	// public function pickGenericLevelElement(ge:Null<GenericLevelElement>) {
+	// 	clearSpecialTool();
+	// 	switch ge {
+	// 		case null:
 
-			case IntGrid(li, cx, cy):
-				selectLayerInstance(li);
-				var v = li.getIntGrid(cx,cy);
-				curTool.as(tool.IntGridTool).selectValue(v);
-				levelRender.bleepRectPx( cx*li.def.gridSize, cy*li.def.gridSize, li.def.gridSize, li.def.gridSize, li.getIntGridColorAt(cx,cy) );
-				curTool.onValuePicking();
-				return true;
+	// 		case IntGrid(li, cx, cy):
+	// 			selectLayerInstance(li);
+	// 			var v = li.getIntGrid(cx,cy);
+	// 			curTool.as(tool.IntGridTool).selectValue(v);
+	// 			levelRender.bleepRectPx( cx*li.def.gridSize, cy*li.def.gridSize, li.def.gridSize, li.def.gridSize, li.getIntGridColorAt(cx,cy) );
+	// 			curTool.onValuePicking();
+	// 			return true;
 
-			case Entity(li, instance):
-				selectLayerInstance(li);
-				curTool.as(tool.EntityTool).selectValue(instance.defUid); // BUG might crash
-				levelRender.bleepRectPx( instance.left, instance.top, instance.def.width, instance.def.height, instance.def.color );
-				curTool.onValuePicking();
-				return true;
+	// 		case Entity(li, instance):
+	// 			selectLayerInstance(li);
+	// 			curTool.as(tool.EntityTool).selectValue(instance.defUid); // BUG might crash
+	// 			levelRender.bleepRectPx( instance.left, instance.top, instance.def.width, instance.def.height, instance.def.color );
+	// 			curTool.onValuePicking();
+	// 			return true;
 
-			case PointField(li, ei, fi, arrayIdx):
-				selectLayerInstance(li);
-				curTool.as(tool.EntityTool).selectValue(ei.defUid); // BUG might crash
-				levelRender.bleepRectPx( ei.left, ei.top, ei.def.width, ei.def.height, ei.def.color );
-				curTool.onValuePicking();
-				if( fi.def.isArray && arrayIdx==fi.getArrayLength()-1 ) {
-					// TODO continue existing path
-				}
-				return true;
+	// 		case PointField(li, ei, fi, arrayIdx):
+	// 			selectLayerInstance(li);
+	// 			curTool.as(tool.EntityTool).selectValue(ei.defUid); // BUG might crash
+	// 			levelRender.bleepRectPx( ei.left, ei.top, ei.def.width, ei.def.height, ei.def.color );
+	// 			curTool.onValuePicking();
+	// 			return true;
 
-			case Tile(li, cx, cy):
-				selectLayerInstance(li);
-				var tid = li.getGridTile(cx,cy);
-				var td = project.defs.getTilesetDef(li.def.tilesetDefUid);
-				if( td==null )
-					return false;
+	// 		case Tile(li, cx, cy):
+	// 			selectLayerInstance(li);
+	// 			var tid = li.getGridTile(cx,cy);
+	// 			var td = project.defs.getTilesetDef(li.def.tilesetDefUid);
+	// 			if( td==null )
+	// 				return false;
 
-				var t = curTool.as(tool.TileTool);
-				t.selectValue( { ids:[tid], mode:t.getMode() } ); // TODO re-support picking saved selections?
-				curTool.onValuePicking();
+	// 			var t = curTool.as(tool.TileTool);
+	// 			t.selectValue( { ids:[tid], mode:t.getMode() } ); // TODO re-support picking saved selections?
+	// 			curTool.onValuePicking();
 
-				// var savedSel = td.getSavedSelectionFor(tid);
-				// if( savedSel==null || !isShiftDown() && !isCtrlDown() )
-				// 	t.selectValue( { ids:[tid], mode:t.getMode() } );
-				// else
-				// 	t.selectValue( savedSel );
-				levelRender.bleepRectPx( cx*li.def.gridSize, cy*li.def.gridSize, li.def.gridSize, li.def.gridSize, 0xffcc00 );
-				return true;
-		}
+	// 			// var savedSel = td.getSavedSelectionFor(tid);
+	// 			// if( savedSel==null || !isShiftDown() && !isCtrlDown() )
+	// 			// 	t.selectValue( { ids:[tid], mode:t.getMode() } );
+	// 			// else
+	// 			// 	t.selectValue( savedSel );
+	// 			levelRender.bleepRectPx( cx*li.def.gridSize, cy*li.def.gridSize, li.def.gridSize, li.def.gridSize, 0xffcc00 );
+	// 			return true;
+	// 	}
 
-		return false;
-	}
+	// 	return false;
+	// }
 
 	function onHeapsEvent(e:hxd.Event) {
 		switch e.kind {
@@ -608,44 +609,72 @@ class Editor extends Page {
 	}
 
 	function onMouseDown(e:hxd.Event) {
-		curTool.startUsing( getMouse(), e.button );
-		rulers.onMouseDown( getMouse(), e.button );
+		var m = getMouse();
+		if( App.ME.isAltDown() || selectionTool.isOveringSelection(m) && e.button==0 )
+			selectionTool.startUsing( m, e.button );
+		else if( isSpecialToolActive() )
+			specialTool.startUsing( m, e.button )
+		else
+			curTool.startUsing( m, e.button );
+
+		rulers.onMouseDown( m, e.button );
 	}
 
 	function onMouseUp() {
-		if( curTool.isRunning() )
-			curTool.stopUsing( getMouse() );
-		rulers.onMouseUp( getMouse() );
+		var m = getMouse();
+
+		// Tool updates
+		if( selectionTool.isRunning() )
+			selectionTool.stopUsing( m );
+		else if( isSpecialToolActive() && specialTool.isRunning() )
+			specialTool.stopUsing( m );
+		else if( curTool.isRunning() )
+			curTool.stopUsing( m );
+
+		rulers.onMouseUp( m );
 	}
 
 	function onMouseMove(e:hxd.Event) {
 		var m = getMouse();
 
-		// Manual updates
-		curTool.onMouseMove(m);
+		// Tool updates
+		if( App.ME.isAltDown() || selectionTool.isRunning() || selectionTool.isOveringSelection(m) )
+			selectionTool.onMouseMove(m);
+		else if( isSpecialToolActive() )
+			specialTool.onMouseMove(m);
+		else
+			curTool.onMouseMove(m);
 		rulers.onMouseMove(m);
 
 		// Mouse coords infos
 		jMouseCoords.empty();
 		if( curLayerInstance!=null )
 			jMouseCoords.append('<span>Grid = ${m.cx},${m.cy}</span>');
-		jMouseCoords.append('<span>Pixels = ${m.levelX},${m.levelY}</span>');
+		// jMouseCoords.append('<span>Layer = ${m.layerX},${m.layerY}</span>');
+		jMouseCoords.append('<span>Level = ${m.levelX},${m.levelY}</span>');
 
 		// Overed element infos
-		var overed = getGenericLevelElementAt(m, !App.ME.isAltDown() || !App.ME.isShiftDown() ? curLayerInstance : null);
-		switch overed {
+		var overed = getGenericLevelElementAt(m.levelX, m.levelY);
+		switch overed { // TODO update that?
 			case null:
-			case IntGrid(li, cx, cy):
-				var v = li.getIntGrid(cx,cy);
-				var c = C.intToHex( C.toWhite( li.def.getIntGridValueColor(v), 0.66 ) );
-				jMouseCoords.prepend('<span style="color:$c">${ li.def.getIntGridValueDisplayName(v) } (IntGrid)</span>');
+			case GridCell(li, cx, cy):
+				if( li.hasAnyGridValue(cx,cy) )
+					switch li.def.type {
+						case IntGrid:
+							var v = li.getIntGrid(cx,cy);
+							var c = C.intToHex( C.toWhite( li.def.getIntGridValueColor(v), 0.66 ) );
+							jMouseCoords.prepend('<span style="color:$c">${ li.def.getIntGridValueDisplayName(v) } (IntGrid)</span>');
+
+						case Tiles:
+							jMouseCoords.prepend('<span>${ li.getGridTile(cx,cy) } (Tile)</span>');
+
+						case Entities:
+						case AutoLayer:
+					}
 
 			case Entity(li, ei):
 				var c = C.intToHex( C.toWhite( ei.def.color, 0.66 ) );
 				jMouseCoords.prepend('<span style="color:$c">${ ei.def.identifier } (Entity)</span>');
-
-			case Tile(li, cx, cy):
-				jMouseCoords.prepend('<span>${ li.getGridTile(cx,cy) } (Tile)</span>');
 
 			case PointField(li, ei, fi, arrayIdx):
 				var c = C.intToHex( C.toWhite( ei.def.color, 0.66 ) );
@@ -662,7 +691,7 @@ class Editor extends Page {
 		ge.emit(ViewportChanged);
 
 		levelRender.focusLevelX += ( oldLevelX - m.levelX );
-		levelRender.focusLevelY += ( oldLevelY - m.levelY);
+		levelRender.focusLevelY += ( oldLevelY - m.levelY );
 	}
 
 	public function selectLevel(l:led.Level) {
@@ -717,6 +746,21 @@ class Editor extends Page {
 		return gridSnapping || !layerSupportsFreeMode();
 	}
 
+	public function setSingleLayerMode(v:Bool) {
+		singleLayerMode = v;
+		jMainPanel.find("input#singleLayerMode").prop("checked", v);
+		levelRender.applyAllLayersVisibility();
+		selectionTool.clear();
+		N.quick( "Single layer mode: "+( singleLayerMode ? "ON" : "off" ));
+	}
+
+	public function setEmptySpaceSelection(v:Bool) {
+		emptySpaceSelection = v;
+		jMainPanel.find("input#emptySpaceSelection").prop("checked", v);
+		selectionTool.clear();
+		N.quick( "Select empty spaces: "+( emptySpaceSelection ? "ON" : "off" ));
+	}
+
 	function onHelp() {
 		ui.Modal.closeAll();
 		var m = new ui.Modal();
@@ -758,8 +802,11 @@ class Editor extends Page {
 		var data = JsTools.prepareProjectFile(project);
 		JsTools.writeFileBytes(projectFilePath, data.bytes);
 
-		if( project.exportTiled )
-			new exporter.Tiled( project, projectFilePath );
+		if( project.exportTiled ) {
+			var e = new exporter.Tiled();
+			e.run( project, projectFilePath );
+		}
+
 
 		needSaving = false;
 		App.ME.registerRecentProject(projectFilePath);
@@ -809,14 +856,6 @@ class Editor extends Page {
 			case EntityFieldSorted:
 			case EntityDefSorted:
 			case EntityInstanceFieldChanged(ei):
-				switch selection {
-					case Entity(li, sei):
-						if( sei==ei ) {
-							selectionCursor.set(None);
-							selectionCursor.set( Entity(li, ei.def, ei, ei.x, ei.y) );
-						}
-					case _:
-				}
 
 			case EntityInstanceAdded(ei):
 			case EntityInstanceRemoved(ei):
@@ -832,7 +871,7 @@ class Editor extends Page {
 			case LayerInstanceAutoRenderingChanged(li):
 
 			case LayerInstanceVisiblityChanged(li):
-				clearSelection();
+				selectionTool.clear();
 				updateLayerList();
 
 			case EntityFieldAdded(ed), EntityFieldRemoved(ed):
@@ -877,13 +916,13 @@ class Editor extends Page {
 				updateLayerList();
 				updateGuide();
 				clearSpecialTool();
-				clearSelection();
+				selectionTool.clear();
 				updateTool();
 				if( !levelHistory.exists(curLevelId) )
 					levelHistory.set(curLevelId, new LevelHistory(curLevelId) );
 
 			case LayerInstanceRestoredFromHistory(_), LevelRestoredFromHistory:
-				clearSelection();
+				selectionTool.clear();
 				clearSpecialTool();
 				updateAppBg();
 				updateLayerList();

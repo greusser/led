@@ -7,8 +7,11 @@ class EntityInstanceEditor extends dn.Process {
 	var ei : led.inst.EntityInstance;
 	var link : h2d.Graphics;
 
-	public function new(ei:led.inst.EntityInstance) {
+	private function new(ei:led.inst.EntityInstance) {
 		super(Editor.ME);
+
+		if( CURRENT!=null )
+			close();
 
 		CURRENT = this;
 		this.ei = ei;
@@ -21,7 +24,6 @@ class EntityInstanceEditor extends dn.Process {
 		App.ME.jBody.append(jPanel);
 
 		updateForm();
-		renderLink();
 	}
 
 	override function onDispose() {
@@ -48,11 +50,26 @@ class EntityInstanceEditor extends dn.Process {
 				else
 					updateForm();
 
+			case LayerInstanceSelected:
+				close();
+
 			case EnumDefRemoved, EnumDefChanged, EnumDefSorted, EnumDefValueRemoved:
 				updateForm();
 
-			case ViewportChanged:
-				renderLink();
+			case EntityInstanceRemoved(ei):
+				if( ei==this.ei )
+					close();
+
+			case EntityInstanceChanged(ei):
+				if( ei==this.ei )
+					updateForm();
+
+			case LayerInstanceRestoredFromHistory(_), LevelRestoredFromHistory:
+				close(); // TODO do softer refresh
+
+
+			case ViewportChanged :
+				updateForm();
 
 			case _:
 		}
@@ -74,8 +91,23 @@ class EntityInstanceEditor extends dn.Process {
 		);
 	}
 
+	public static function openFor(ei:led.inst.EntityInstance) {
+		if( existsFor(ei) )
+			return CURRENT;
+		else
+			return new EntityInstanceEditor(ei);
+	}
+
+	public static inline function existsFor(ei:led.inst.EntityInstance) {
+		return isOpen() && CURRENT.ei==ei;
+	}
+
+	public static inline function isOpen() {
+		return CURRENT!=null && !CURRENT.destroyed;
+	}
+
 	public static function close() {
-		if( CURRENT!=null && !CURRENT.destroyed ) {
+		if( isOpen() ) {
 			CURRENT.destroy();
 			CURRENT = null;
 			return true;
@@ -185,6 +217,9 @@ class EntityInstanceEditor extends dn.Process {
 
 		// Picking of a point
 		t.onPick = function(m) {
+			if( this.destroyed )
+				return;
+
 			if( fi.def.isArray && editIdx>=fi.getArrayLength()-1 ) {
 				// Append points in an array
 				fi.parseValue(editIdx, m.cx+Const.POINT_SEPARATOR+m.cy);
@@ -203,6 +238,7 @@ class EntityInstanceEditor extends dn.Process {
 				fi.parseValue(editIdx, m.cx+Const.POINT_SEPARATOR+m.cy);
 			}
 			onFieldChange(true);
+			jPanel.addClass("picking");
 		}
 
 		// Tool stopped
@@ -294,7 +330,7 @@ class EntityInstanceEditor extends dn.Process {
 					else
 						jPick.text( fi.valueIsNull(arrayIdx) ? "--none--" : fi.getPointStr(arrayIdx) );
 					jPick.click( function(_) {
-						if( Editor.ME.isUsingSpecialTool(tool.PickPoint) ) {
+						if( Editor.ME.isSpecialToolActive(tool.PickPoint) ) {
 							// Cancel
 							Editor.ME.clearSpecialTool();
 							updateForm();
@@ -373,8 +409,10 @@ class EntityInstanceEditor extends dn.Process {
 	function updateForm() {
 		jPanel.empty();
 		jPanel.removeClass("picking");
-		if( ei==null )
+		if( ei==null ) {
+			close();
 			return;
+		}
 
 		var jHeader = new J('<header/>');
 		jHeader.appendTo(jPanel);
@@ -382,7 +420,7 @@ class EntityInstanceEditor extends dn.Process {
 		var jEdit = new J('<a class="edit">Edit</a>');
 		jEdit.click( function(ev) {
 			ev.preventDefault();
-			new ui.modal.panel.EditEntityDefs();
+			new ui.modal.panel.EditEntityDefs(ei.def);
 		});
 		jHeader.append(jEdit);
 
@@ -485,5 +523,6 @@ class EntityInstanceEditor extends dn.Process {
 
 
 		JsTools.parseComponents(jPanel);
+		renderLink();
 	}
 }

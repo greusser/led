@@ -51,7 +51,15 @@ class FieldInstance {
 			__type: def.getJsonTypeString(),
 
 			defUid: defUid,
-			realEditorValues: internalValues.map( function(v) JsonTools.writeEnum(v,true) ),
+			realEditorValues: internalValues.map( (e)->{
+				return switch e {
+					case null, V_Int(_), V_Float(_), V_Bool(_):
+						JsonTools.writeEnum(e,true);
+
+					case V_String(v):
+						JsonTools.writeEnum( V_String(escapeStringForJson(v)), true);
+				}
+			}),
 
 		}
 	}
@@ -65,6 +73,11 @@ class FieldInstance {
 	public function addArrayValue() {
 		if( def.isArray )
 			internalValues.push(null);
+	}
+
+	public function clearValue() {
+		if( def.isArray )
+			internalValues = [];
 	}
 
 	public function removeArrayValue(idx:Int) {
@@ -254,7 +267,7 @@ class FieldInstance {
 		return switch def.type {
 			case F_Int: getInt(arrayIdx);
 			case F_Float: JsonTools.writeFloat( getFloat(arrayIdx) );
-			case F_String: getString(arrayIdx);
+			case F_String: escapeStringForJson( getString(arrayIdx) );
 			case F_Bool: getBool(arrayIdx);
 			case F_Color: getColorAsHexStr(arrayIdx);
 			case F_Point: getPointGrid(arrayIdx);
@@ -306,10 +319,18 @@ class FieldInstance {
 
 	public function getString(arrayIdx:Int) : String {
 		require(F_String);
-		return isUsingDefault(arrayIdx) ? def.getStringDefault() : switch internalValues[arrayIdx] {
+		var out = isUsingDefault(arrayIdx) ? def.getStringDefault() : switch internalValues[arrayIdx] {
 			case V_String(v): v;
 			case _: throw "unexpected";
 		}
+		return out;
+	}
+
+	public static inline function escapeStringForJson(s:String) {
+		s = StringTools.replace(s, "\\", "\\\\");
+		s = StringTools.replace(s, '"', '\\"');
+		s = StringTools.replace(s, "'", "\'");
+		return s;
 	}
 
 	public function getEnumValue(arrayIdx:Int) : Null<String> {

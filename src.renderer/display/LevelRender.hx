@@ -5,7 +5,6 @@ class LevelRender extends dn.Process {
 
 	public var editor(get,never) : Editor; inline function get_editor() return Editor.ME;
 
-	public var enhanceActiveLayer(default,null) = false;
 	public var focusLevelX(default,set) : Float;
 	public var focusLevelY(default,set) : Float;
 	public var zoom(get,set) : Float;
@@ -65,11 +64,21 @@ class LevelRender extends dn.Process {
 		focusLevelX = editor.curLevel.pxWid*0.5;
 		focusLevelY = editor.curLevel.pxHei*0.5;
 
+		var old = zoom;
 		var pad = 100 * js.Browser.window.devicePixelRatio;
 		zoom = M.fmin(
 			editor.canvasWid() / ( editor.curLevel.pxWid + pad ),
 			editor.canvasHei() / ( editor.curLevel.pxHei + pad )
 		);
+
+		// Fit closer if repeated
+		if( old==zoom ) {
+			var pad = 16 * js.Browser.window.devicePixelRatio;
+			zoom = M.fmin(
+				editor.canvasWid() / ( editor.curLevel.pxWid + pad ),
+				editor.canvasHei() / ( editor.curLevel.pxHei + pad )
+			);
+		}
 	}
 
 	inline function set_focusLevelX(v) {
@@ -810,22 +819,20 @@ class LevelRender extends dn.Process {
 		return wrapper;
 	}
 
-	public function setEnhanceActiveLayer(v:Bool) {
-		enhanceActiveLayer = v;
-		editor.jMainPanel.find("input#enhanceActiveLayer").prop("checked", v);
-		applyAllLayersVisibility();
-	}
-
 	function applyLayerVisibility(li:led.inst.LayerInstance) {
 		var wrapper = layerRenders.get(li.layerDefUid);
 		if( wrapper==null )
 			return;
 
 		wrapper.visible = isLayerVisible(li);
-		wrapper.alpha = li.def.displayOpacity * ( !enhanceActiveLayer || li==editor.curLayerInstance ? 1 : 0.4 );
-		wrapper.filter = !enhanceActiveLayer || li==editor.curLayerInstance ? null : new h2d.filter.Blur(4);
+		wrapper.alpha = li.def.displayOpacity * ( !editor.singleLayerMode || li==editor.curLayerInstance ? 1 : 0.2 );
+		wrapper.filter = !editor.singleLayerMode || li==editor.curLayerInstance ? null : new h2d.filter.Group([
+			C.getColorizeFilterH2d(0x8c99c1, 0.9),
+			new h2d.filter.Blur(2),
+		]);
 	}
 
+	@:allow(page.Editor)
 	function applyAllLayersVisibility() {
 		for(ld in editor.project.defs.layers) {
 			var li = editor.curLevel.getLayerInstance(ld);
@@ -838,6 +845,11 @@ class LevelRender extends dn.Process {
 		if( li==null )
 			li = editor.curLevel.getLayerInstance(layerDefUid);
 		layerInvalidations.set( li.layerDefUid, { left:0, right:li.cWid-1, top:0, bottom:li.cHei-1 } );
+
+		if( li.def.type==IntGrid )
+			for(l in editor.curLevel.layerInstances)
+				if( l.def.type==AutoLayer && l.def.autoSourceLayerDefUid==li.def.uid )
+					invalidateLayer(l);
 	}
 
 	public inline function invalidateLayerArea(li:led.inst.LayerInstance, left:Int, right:Int, top:Int, bottom:Int) {

@@ -1,12 +1,42 @@
+# 0.4.0-beta
+
+
+ - **Selection**: you can now select any element in a level by using `ALT` + left click. You can move it around by holding left click. To select a **rectangle area**, use `ALT` + `SHIFT` + left click.
+ - **Duplicate**: you can duplicate any element in the level by drag it with `CTRL`+`ALT` keys.
+
+    **NOTE: For now, "undoing" a *selection move* will require multiple Undos: one per affected layer.** Undo/Redo features need a *major* rework, but this will only happen in a future update (see [#151](https://github.com/deepnight/led/issues/151)). Sorry for the inconvenience!
+
+ - Renamed the old *Enhance active layer* option to **Single layer mode**
+ - `Alt`+`left click` now picks elements in *all* layers. If you have the *Single layer mode* activated (`A` key), it will make a smarter choice than before, and prioritize current layer. TLDR; you should always pick what is expected with this action.
+ - Added an option to allow selection of empty spaces
+ - Use `DELETE` key to delete selected elements
+ - Use `CTRL`+`A` shortcut to select everything (limited to current layer in *Single Layer Mode*).
+ - Added the up-to-date *JSON format doc* to the app Home page.
+ - Added fullscreen button to view Home *changelogs*
+ - Pressing `ENTER` on the Home screen now opens last edited map.
+ - Removed duplicate sample map
+ - Fixed "color" field size in Entity instance editor when the value wasn't default.
+ - Updated help window
+ - Many bug fixes
+
 # 0.3.2-beta
+
+ - Fixed a crash when resizing level with an Entity having a null Point value
+ - Added button icons in Help window
+
+# 0.3.1-beta
 
  - **Tiled (TMX) export option**: from the project settings (`F1`), check the *Tiled export* option to save Tiled compatible files along with the LEd JSON.
 
     **DISCLAIMER**: this export is limited because Tiled doesn't support some core features from LEd, like different grid sizes in the same level or Array of properties in Entities. This export is only meant as a short-term solution to quickly load LEd data in a framework only supporting TMX files. See [documentation](https://deepnight.net/docs/led/json/tiled/) for more informations.
 
-# 0.3.1-beta
-
+ - Better active/inactive visual state for rules and groups of rules in auto-layers
+ - Inactive rules are no longer exported in the JSON file
+ - Pressing `F` key twice fits the current level in view but with less padding
  - Added an automated JSON format documentation generator (see [JSON_DOC.md](https://github.com/deepnight/led/blob/master/JSON_DOC.md) in sources)
+ - Added version badges in the JSON doc to quickly identify changes per versions.
+ - Updated home page
+ - Updated `sample` maps
 
 # 0.3.0-beta
 

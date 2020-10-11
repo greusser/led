@@ -1,6 +1,6 @@
-package tool;
+package tool.lt;
 
-class EmptyTool extends Tool<Int> {
+class DoNothing extends tool.LayerTool<Int> {
 	public function new() {
 		super();
 	}

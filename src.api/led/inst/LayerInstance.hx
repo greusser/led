@@ -66,41 +66,48 @@ class LayerInstance {
 				var arr = [];
 				if( def.isAutoLayer() ) {
 					var td = _project.defs.getTilesetDef(def.autoTilesetDefUid);
-					for(rg in def.autoRuleGroups)
-					for(rule in rg.rules) {
-						var ruleTiles = autoTiles.get( rule.uid );
-						arr.push({
-							ruleId: rule.uid,
-							results: {
-								if( ruleTiles==null )
-									[];
-								else {
-									var tilesArr = [];
-									for( ruleResult in ruleTiles.keyValueIterator() ) {
-										var stampRenderInfos = getRuleStampRenderInfos(rule, td, ruleResult.value.tileIds, ruleResult.value.flips);
-										var cx = getCx(ruleResult.key);
-										var cy = getCy(ruleResult.key);
-										var tiles = ruleResult.value.tileIds.map( (tid:Int)->{
-											return {
-												tileId: tid,
-												__x: cx*def.gridSize + stampRenderInfos.get(tid).xOff,
-												__y: cy*def.gridSize + stampRenderInfos.get(tid).yOff,
-												__srcX: td==null ? -1 : td.getTileSourceX(tid),
-												__srcY: td==null ? -1 : td.getTileSourceY(tid),
-											}
-										});
-										tilesArr.push({
-											__cx: cx,
-											__cy: cy,
-											coordId: ruleResult.key,
-											tiles: tiles,
-											flips: ruleResult.value.flips,
-										});
+					for(rg in def.autoRuleGroups) {
+						if( !rg.active )
+							continue;
+
+						for(rule in rg.rules) {
+							if( !rule.active )
+								continue;
+
+							var ruleTiles = autoTiles.get( rule.uid );
+							arr.push({
+								ruleId: rule.uid,
+								results: {
+									if( ruleTiles==null )
+										[];
+									else {
+										var tilesArr = [];
+										for( ruleResult in ruleTiles.keyValueIterator() ) {
+											var stampRenderInfos = getRuleStampRenderInfos(rule, td, ruleResult.value.tileIds, ruleResult.value.flips);
+											var cx = getCx(ruleResult.key);
+											var cy = getCy(ruleResult.key);
+											var tiles = ruleResult.value.tileIds.map( (tid:Int)->{
+												return {
+													tileId: tid,
+													__x: cx*def.gridSize + stampRenderInfos.get(tid).xOff,
+													__y: cy*def.gridSize + stampRenderInfos.get(tid).yOff,
+													__srcX: td==null ? -1 : td.getTileSourceX(tid),
+													__srcY: td==null ? -1 : td.getTileSourceY(tid),
+												}
+											});
+											tilesArr.push({
+												__cx: cx,
+												__cy: cy,
+												coordId: ruleResult.key,
+												tiles: tiles,
+												flips: ruleResult.value.flips,
+											});
+										}
+										tilesArr;
 									}
-									tilesArr;
 								}
-							}
-						});
+							});
+						}
 					}
 				}
 				arr;
@@ -247,12 +254,20 @@ class LayerInstance {
 		return cx + cy*cWid;
 	}
 
-	public function getCx(coordId:Int) {
+	public inline function getCx(coordId:Int) {
 		return coordId - Std.int(coordId/cWid)*cWid;
 	}
 
 	public inline function getCy(coordId:Int) {
 		return Std.int(coordId/cWid);
+	}
+
+	public inline function levelToLayerCx(levelX:Int) {
+		return Std.int( ( levelX - pxOffsetX ) / def.gridSize );
+	}
+
+	public inline function levelToLayerCy(levelY:Int) {
+		return Std.int( ( levelY - pxOffsetY ) / def.gridSize );
 	}
 
 	public function tidy(p:Project) {
@@ -342,6 +357,8 @@ class LayerInstance {
 						if( fi.def.type==F_Point )
 							for(i in 0...fi.getArrayLength())  {
 								var pt = fi.getPointGrid(i);
+								if( pt==null )
+									continue;
 								pt.cx+=cDeltaX;
 								pt.cy+=cDeltaY;
 								fi.parseValue( i, pt.cx + Const.POINT_SEPARATOR + pt.cy );
@@ -373,6 +390,15 @@ class LayerInstance {
 		pxOffsetY = newPxOffsetY;
 	}
 
+	public inline function hasAnyGridValue(cx:Int, cy:Int) {
+		return switch def.type {
+			case IntGrid: hasIntGrid(cx,cy);
+			case Tiles: hasGridTile(cx,cy);
+			case Entities: false;
+			case AutoLayer: false;
+		}
+	}
+
 
 	/** INT GRID *******************/
 
@@ -394,7 +420,10 @@ class LayerInstance {
 	public function setIntGrid(cx:Int, cy:Int, v:Int) {
 		requireType(IntGrid);
 		if( isValid(cx,cy) )
-			intGrid.set( coordId(cx,cy), v );
+			if( v>=0 )
+				intGrid.set( coordId(cx,cy), v );
+			else
+				removeIntGrid(cx,cy);
 	}
 
 	public inline function hasIntGrid(cx:Int, cy:Int) {
@@ -438,6 +467,7 @@ class LayerInstance {
 	public function duplicateEntityInstance(ei:EntityInstance) : EntityInstance {
 		var copy = EntityInstance.fromJson( _project, ei.toJson(this) );
 		entityInstances.push(copy);
+
 		return copy;
 	}
 
@@ -451,9 +481,12 @@ class LayerInstance {
 
 	/** TILES *******************/
 
-	public function setGridTile(cx:Int, cy:Int, tileId:Int) {
-		if( isValid(cx,cy) && tileId!=null )
-			gridTiles.set( coordId(cx,cy), tileId );
+	public function setGridTile(cx:Int, cy:Int, tileId:Null<Int>) {
+		if( isValid(cx,cy) )
+			if( tileId!=null )
+				gridTiles.set( coordId(cx,cy), tileId );
+			else
+				removeGridTile(cx,cy);
 	}
 
 	public function removeGridTile(cx:Int, cy:Int) {

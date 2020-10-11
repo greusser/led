@@ -12,8 +12,10 @@ class PickPoint extends Tool<{ x:Int, y:Int }> {
 		if( pickOrigin!=null ) {
 			var grid = curLayerInstance.def.gridSize;
 			editor.cursor.set( Link(
-				(pickOrigin.cx+0.5)*grid, (pickOrigin.cy+0.5)*grid,
-				(m.cx+0.5)*grid, (m.cy+0.5)*grid,
+				curLayerInstance.pxOffsetX + (pickOrigin.cx+0.5)*grid,
+				curLayerInstance.pxOffsetY + (pickOrigin.cy+0.5)*grid,
+				curLayerInstance.pxOffsetX + (m.cx+0.5)*grid,
+				curLayerInstance.pxOffsetY + (m.cy+0.5)*grid,
 				pickOrigin.color
 			));
 		}
@@ -26,10 +28,13 @@ class PickPoint extends Tool<{ x:Int, y:Int }> {
 
 		if( buttonId==1 )
 			editor.clearSpecialTool();
+		else if( buttonId==0 )
+			curMode = Add;
 	}
 
 	override function stopUsing(m:MouseCoords) {
 		super.stopUsing(m);
+
 		if( button==0 ) {
 			editor.levelRender.bleepRectCase(m.cx,m.cy, 1,1, 0xffcc00);
 			onPick(m);

@@ -151,9 +151,10 @@ class App extends dn.Process {
 		exit(false);
 	}
 
+	public static inline function isMac() return js.Browser.window.navigator.userAgent.indexOf('Mac') != -1;
 	public inline function isKeyDown(keyId:Int) return keyDowns.get(keyId)==true;
 	public inline function isShiftDown() return keyDowns.get(K.SHIFT)==true;
-	public inline function isCtrlDown() return keyDowns.get(K.CTRL)==true; // TODO support mac cmd
+	public inline function isCtrlDown() return (App.isMac() ? keyDowns.get(K.LEFT_WINDOW_KEY) || keyDowns.get(K.RIGHT_WINDOW_KEY) : keyDowns.get(K.CTRL))==true;
 	public inline function isAltDown() return keyDowns.get(K.ALT)==true;
 	public inline function hasAnyToggleKeyDown() return isShiftDown() || isCtrlDown() || isAltDown();
 

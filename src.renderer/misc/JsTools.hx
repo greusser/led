@@ -284,6 +284,8 @@ class JsTools {
 
 		if( keyLabel.toLowerCase()=="shift" )
 			keyLabel = "⇧";
+		else if ( App.isMac() && keyLabel.toLowerCase()=="ctrl")
+			keyLabel = "⌘";
 
 		return new J('<span class="key">$keyLabel</span>');
 	}
@@ -309,7 +311,8 @@ class JsTools {
 				case _:
 					var jKey = new J('<span class="key">${k.toUpperCase()}</span>');
 					switch k.toLowerCase() {
-						case "shift", "alt", "ctrl" : jKey.addClass( k.toLowerCase() );
+						case "shift", "alt" : jKey.addClass( k.toLowerCase() );
+						case "ctrl" : jKey.addClass( App.isMac() ? 'meta' : k.toLowerCase() );
 						case _:
 					}
 					jKey;
@@ -335,7 +338,7 @@ class JsTools {
 		});
 
 		// External links
-		var links = jCtx.find("a[href], button[href]");
+		var links = jCtx.find("a[href^=http], button[href]");
 		links.each( function(idx,e) {
 			var link = new J(e);
 			var url = link.attr("href");
@@ -625,6 +628,7 @@ class JsTools {
 
 	public static function createAutoPatternGrid(
 		rule: led.def.AutoLayerRuleDef,
+		sourceDef: led.def.LayerDef,
 		layerDef: led.def.LayerDef,
 		previewMode=false,
 		?explainCell: (desc:Null<String>)->Void,
@@ -711,8 +715,8 @@ class JsTools {
 							addExplain(jCell, 'This cell should contain any IntGrid value to match.');
 						}
 						else {
-							jCell.css("background-color", C.intToHex( layerDef.getIntGridValueDef(M.iabs(v)-1).color ) );
-							addExplain(jCell, 'This cell should contain "${layerDef.getIntGridValueDisplayName(M.iabs(v)-1)}" to match.');
+							jCell.css("background-color", C.intToHex( sourceDef.getIntGridValueDef(M.iabs(v)-1).color ) );
+							addExplain(jCell, 'This cell should contain "${sourceDef.getIntGridValueDisplayName(M.iabs(v)-1)}" to match.');
 						}
 					}
 					else {
@@ -722,8 +726,8 @@ class JsTools {
 							addExplain(jCell, 'This cell should NOT contain any IntGrid value to match.');
 						}
 						else {
-							jCell.css("background-color", C.intToHex( layerDef.getIntGridValueDef(M.iabs(v)-1).color ) );
-							addExplain(jCell, 'This cell should NOT contain "${layerDef.getIntGridValueDisplayName(M.iabs(v)-1)}" to match.');
+							jCell.css("background-color", C.intToHex( sourceDef.getIntGridValueDef(M.iabs(v)-1).color ) );
+							addExplain(jCell, 'This cell should NOT contain "${sourceDef.getIntGridValueDisplayName(M.iabs(v)-1)}" to match.');
 						}
 					}
 				}

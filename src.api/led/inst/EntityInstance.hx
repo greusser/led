@@ -72,8 +72,8 @@ class EntityInstance {
 		return ( getCy(ld)+0.5 ) * ld.gridSize - y;
 	}
 
-	public function isOver(levelX:Int, levelY:Int, pad=0) {
-		return levelX >= left-pad && levelX <= right+pad && levelY >= top-pad && levelY <= bottom+pad;
+	public function isOver(layerX:Int, layerY:Int, pad=0) { // HACK rename
+		return layerX >= left-pad && layerX <= right+pad && layerY >= top-pad && layerY <= bottom+pad;
 	}
 
 	public function getSmartColor(bright:Bool) {
@@ -125,28 +125,11 @@ class EntityInstance {
 		return fieldInstances.get( fieldDef.uid );
 	}
 
-	// public function getStringField(name:String) : Null<String> {
-	// 	var fd = def.getFieldDef(name);
-	// 	fd.require(F_String);
-	// 	return getFieldInstance(fd).getString();
-	// }
-
-	// public function getFloatField(name:String) : Null<Float> {
-	// 	var fd = def.getFieldDef(name);
-	// 	fd.require(F_Float);
-	// 	return getFieldInstance(fd).getFloat();
-	// }
-
-	// public function getIntField(name:String) : Null<Int> {
-	// 	var fd = def.getFieldDef(name);
-	// 	fd.require(F_Int);
-	// 	return getFieldInstance(fd).getInt(0); // field array
-	// }
-
-	// public function getColorField(name:String) : Null<UInt> {
-	// 	var fd = def.getFieldDef(name);
-	// 	fd.require(F_Color);
-	// 	return getFieldInstance(fd).getColorAsInt();
-	// }
-
+	public function getFieldInstancesOfType(type:led.LedTypes.FieldType) {
+		var all = [];
+		for(fi in fieldInstances)
+			if( fi.def.type.getIndex() == type.getIndex() )
+				all.push(fi);
+		return all;
+	}
 }

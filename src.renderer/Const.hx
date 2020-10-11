@@ -19,9 +19,11 @@ class Const {
 
 	#if !macro
 	public static var APP_NAME = "LEd";
+	public static var DEEPNIGHT_URL = "https://deepnight.net/";
 	public static var WEBSITE_URL = "https://deepnight.net/tools/led-2d-level-editor/";
 	public static var DOCUMENTATION_URL = "https://deepnight.net/docs/led/";
 	public static var ISSUES_URL = "https://github.com/deepnight/led/issues";
+	public static var JSON_DOC_URL = "https://github.com/deepnight/led/blob/master/JSON_DOC.md";
 	public static var POINT_SEPARATOR = ",";
 
 	public static var JSON_HEADER = {
@@ -36,6 +38,7 @@ class Const {
 	public static var APP_CHANGELOG = new dn.Changelog(APP_CHANGELOG_MD);
 
 	public static var JSON_CHANGELOG_MD = getJsonChangelogMarkdown();
+	public static var JSON_FORMAT_MD = getJsonFormatMarkdown();
 
 	public static var FPS = 60;
 	public static var SCALE = 1.0;
@@ -48,6 +51,7 @@ class Const {
 	public static var DP_BG = _inc++;
 	public static var DP_MAIN = _inc++;
 	public static var DP_UI = _inc++;
+	public static var DP_TOP = _inc++;
 
 	public static var DEFAULT_LEVEL_WIDTH = 512;
 	public static var DEFAULT_LEVEL_HEIGHT = 256;
@@ -85,6 +89,11 @@ class Const {
 	static macro function getJsonChangelogMarkdown() {
 		haxe.macro.Context.registerModuleDependency("Const","JSON_CHANGELOG.md");
 		return macro $v{ sys.io.File.getContent("JSON_CHANGELOG.md") };
+	}
+
+	static macro function getJsonFormatMarkdown() {
+		haxe.macro.Context.registerModuleDependency("Const","JSON_DOC.md");
+		return macro $v{ sys.io.File.getContent("JSON_DOC.md") };
 	}
 
 	static macro function buildLatestReleaseNotes() {

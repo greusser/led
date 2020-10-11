@@ -12,18 +12,21 @@ class Home extends Page {
 		loadPageTemplate("home", {
 			app: Const.APP_NAME,
 			appVer: Const.getAppVersion(),
+			deepnightUrl: Const.DEEPNIGHT_URL,
+			jsonDocUrl: Const.JSON_DOC_URL,
 			docUrl: Const.DOCUMENTATION_URL,
 			websiteUrl : Const.WEBSITE_URL,
 			issueUrl : Const.ISSUES_URL,
 			appChangelog: StringTools.htmlEscape( Const.APP_CHANGELOG_MD),
 			jsonChangelog: StringTools.htmlEscape( Const.JSON_CHANGELOG_MD ),
+			jsonFormat: StringTools.htmlEscape( Const.JSON_FORMAT_MD ),
 		});
 		App.ME.setWindowTitle();
 
-		jPage.find(".changelog code").each( function(idx,e) {
+		jPage.find(".changelogs code").each( function(idx,e) {
 			var jCode = new J(e);
-			if( jCode.text().toLowerCase()=="samples" ) {
-				var jLink = new J('<a href="#" class="discreet">Samples</a>');
+			if( (~/sample/i).match( jCode.text().toLowerCase() ) ) {
+				var jLink = new J('<a href="#" class="discreet">${jCode.text()}</a>');
 				jLink.click( function(ev:js.jquery.Event) {
 					ev.preventDefault();
 					onLoadSamples();
@@ -45,9 +48,22 @@ class Home extends Page {
 			onNew();
 		});
 
-		jPage.find(".exit").click( function(ev) {
-			App.ME.exit(true);
+		var jFullscreenBt = jPage.find("button.fullscreen");
+		var jChangelogs = jPage.find(".changelogsWrapper");
+
+		jFullscreenBt.click( function(ev) {
+			jChangelogs.toggleClass("fullscreen");
+			var btIcon = jFullscreenBt.find(".icon");
+			btIcon.removeClass();
+			if( jChangelogs.hasClass("fullscreen") )
+				btIcon.addClass("icon fullscreen_exit");
+			else
+				btIcon.addClass("icon fullscreen");
 		});
+
+		// jPage.find(".exit").click( function(ev) {
+		// 	App.ME.exit(true);
+		// });
 
 		updateRecents();
 	}
@@ -185,6 +201,13 @@ class Home extends Page {
 			case K.W, K.Q:
 				if( App.ME.isCtrlDown() )
 					App.ME.exit();
+
+			case K.ENTER:
+				jPage.find("ul.recents li:first").click();
+
+			case K.ESCAPE:
+				if( jPage.find(".changelogsWrapper").hasClass("fullscreen") )
+					jPage.find("button.fullscreen").click();
 		}
 	}
 
